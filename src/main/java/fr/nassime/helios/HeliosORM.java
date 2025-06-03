@@ -2,6 +2,7 @@ package fr.nassime.helios;
 
 import fr.nassime.helios.connection.ConnectionManager;
 import fr.nassime.helios.connection.DataSourceConfig;
+import fr.nassime.helios.exception.HeliosDatabaseException;
 import fr.nassime.helios.exception.HeliosException;
 import fr.nassime.helios.mapping.EntityMapper;
 import fr.nassime.helios.mapping.ResultSetMapper;
@@ -12,6 +13,7 @@ import fr.nassime.helios.query.UpdateBuilder;
 import fr.nassime.helios.relation.RelationInfo;
 import fr.nassime.helios.relation.RelationLoader;
 import fr.nassime.helios.transaction.TransactionManager;
+import fr.nassime.helios.util.HeliosLogger;
 import fr.nassime.helios.util.ReflectionUtils;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +26,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import static org.reflections.Reflections.log;
 
 @Slf4j
 public class HeliosORM implements AutoCloseable {
@@ -52,7 +56,8 @@ public class HeliosORM implements AutoCloseable {
         try {
             return connectionManager.getConnection();
         } catch (SQLException e) {
-            throw new HeliosException("Unable to obtain a database fr.nassime.helios.connection", e);
+            HeliosLogger.error("Erreur SQL", e);
+            throw new HeliosDatabaseException("Erreur SQL", e);
         }
     }
 
@@ -64,7 +69,8 @@ public class HeliosORM implements AutoCloseable {
         try (Connection connection = getConnection()) {
             return transactionManager.executeInTransaction(connection, operation);
         } catch (SQLException e) {
-            throw new HeliosException("Error during fr.nassime.helios.transaction execution", e);
+            HeliosLogger.error("Erreur SQL", e);
+            throw new HeliosDatabaseException("Erreur SQL", e);
         }
     }
 
@@ -72,7 +78,8 @@ public class HeliosORM implements AutoCloseable {
         try (Connection connection = getConnection()) {
             transactionManager.executeInTransactionWithoutResult(connection, operation);
         } catch (SQLException e) {
-            throw new HeliosException("Error during fr.nassime.helios.transaction execution", e);
+            HeliosLogger.error("Erreur SQL", e);
+            throw new HeliosDatabaseException("Erreur SQL", e);
         }
     }
 
@@ -103,8 +110,9 @@ public class HeliosORM implements AutoCloseable {
                 }
 
                 return Optional.ofNullable(entity);
-            } catch (SQLException e) {
-                throw new HeliosException("Error while finding entity by ID", e);
+            }catch (SQLException e) {
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
         });
     }
@@ -156,7 +164,8 @@ public class HeliosORM implements AutoCloseable {
 
                 return entities;
             } catch (SQLException e) {
-                throw new HeliosException("Error while finding entities by conditions", e);
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
         });
     }
@@ -298,8 +307,10 @@ public class HeliosORM implements AutoCloseable {
                 }
                 return entity;
             } catch (SQLException e) {
-                throw new HeliosException("Error during entity update", e);
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
+
         });
     }
 
@@ -327,7 +338,8 @@ public class HeliosORM implements AutoCloseable {
                 int rowsAffected = statement.executeUpdate();
                 return rowsAffected > 0;
             } catch (SQLException e) {
-                throw new HeliosException("Error during entity deletion", e);
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
         });
     }
@@ -359,7 +371,8 @@ public class HeliosORM implements AutoCloseable {
                 }
                 return statement.executeUpdate();
             } catch (SQLException e) {
-                throw new HeliosException("Error during fr.nassime.helios.query execution", e);
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
         });
     }
@@ -381,8 +394,9 @@ public class HeliosORM implements AutoCloseable {
 
                     return entities;
                 }
-            } catch (SQLException e) {
-                throw new HeliosException("Error during fr.nassime.helios.query execution", e);
+            }catch (SQLException e) {
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
         });
     }
@@ -398,7 +412,8 @@ public class HeliosORM implements AutoCloseable {
                     return resultSetMapper.mapToMapList(resultSet);
                 }
             } catch (SQLException e) {
-                throw new HeliosException("Error during fr.nassime.helios.query execution", e);
+                HeliosLogger.error("Erreur SQL", e);
+                throw new HeliosDatabaseException("Erreur SQL", e);
             }
         });
     }
