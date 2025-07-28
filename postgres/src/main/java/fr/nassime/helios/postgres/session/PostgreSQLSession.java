@@ -7,7 +7,12 @@ import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.transaction.Transaction;
 import fr.nassime.helios.postgres.connection.PostgreSQLConnectionManager;
+import fr.nassime.helios.postgres.mapping.EntityMapper;
+import fr.nassime.helios.postgres.mapping.EntityMetadata;
+import fr.nassime.helios.postgres.mapping.ResultSetMapper;
 import fr.nassime.helios.postgres.query.PostgreSQLQuery;
+import fr.nassime.helios.postgres.relation.RelationLoader;
+import fr.nassime.helios.postgres.sql.SqlBuilder;
 import fr.nassime.helios.postgres.transaction.PostgreSQLTransaction;
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,10 +49,28 @@ public class PostgreSQLSession implements HeliosSession {
             throw new HeliosException("Session is closed");
         }
         
-        // TODO: Implement entity finding logic
-        // For now, returning empty - will be implemented with entity mappers
+        if (id == null) {
+            return Optional.empty();
+        }
+        
         log.debug("Finding entity {} with id {}", entityClass.getSimpleName(), id);
-        return Optional.empty();
+        
+        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
+        SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectById(metadata);
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
+                stmt.setObject(1, id);
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    ResultSetMapper mapper = new ResultSetMapper();
+                    T entity = mapper.mapToEntity(rs, entityClass);
+                    return Optional.ofNullable(entity);
+                }
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to find entity by ID", e);
+            }
+        });
     }
     
     @Override
@@ -56,9 +79,21 @@ public class PostgreSQLSession implements HeliosSession {
             throw new HeliosException("Session is closed");
         }
         
-        // TODO: Implement find all logic
         log.debug("Finding all entities of type {}", entityClass.getSimpleName());
-        return List.of();
+        
+        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
+        SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectAll(metadata);
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query.getSql());
+                 ResultSet rs = stmt.executeQuery()) {
+                
+                ResultSetMapper mapper = new ResultSetMapper();
+                return mapper.mapToList(rs, entityClass);
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to find all entities", e);
+            }
+        });
     }
     
     @Override
@@ -71,9 +106,74 @@ public class PostgreSQLSession implements HeliosSession {
             throw new IllegalArgumentException("Entity cannot be null");
         }
         
-        // TODO: Implement save logic with entity mappers
-        log.debug("Saving entity {}", entity.getClass().getSimpleName());
-        return entity;
+        @SuppressWarnings("unchecked")
+        Class<T> entityClass = (Class<T>) entity.getClass();
+        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
+        
+        // Check if entity has ID (update) or not (insert)
+        Object idValue = metadata.getColumns().get(metadata.getIdField().getName()).getValue(entity);
+        boolean isUpdate = idValue != null && (!(idValue instanceof Number) || ((Number) idValue).longValue() != 0);
+        
+        if (isUpdate) {
+            log.debug("Updating entity {} with id {}", entityClass.getSimpleName(), idValue);
+            return updateEntity(entity, metadata);
+        } else {
+            log.debug("Inserting new entity {}", entityClass.getSimpleName());
+            return insertEntity(entity, metadata);
+        }
+    }
+    
+    private <T> T insertEntity(T entity, EntityMetadata metadata) {
+        SqlBuilder.PreparedQuery query = SqlBuilder.buildInsert(metadata, entity);
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
+                // Set parameters
+                List<Object> parameters = query.getParameters();
+                for (int i = 0; i < parameters.size(); i++) {
+                    stmt.setObject(i + 1, parameters.get(i));
+                }
+                
+                if (metadata.isIdGenerated()) {
+                    // Get generated ID
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            Object generatedId = rs.getObject(1);
+                            metadata.getColumns().get(metadata.getIdField().getName()).setValue(entity, generatedId);
+                        }
+                    }
+                } else {
+                    stmt.executeUpdate();
+                }
+                
+                return entity;
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to insert entity", e);
+            }
+        });
+    }
+    
+    private <T> T updateEntity(T entity, EntityMetadata metadata) {
+        SqlBuilder.PreparedQuery query = SqlBuilder.buildUpdate(metadata, entity);
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
+                // Set parameters
+                List<Object> parameters = query.getParameters();
+                for (int i = 0; i < parameters.size(); i++) {
+                    stmt.setObject(i + 1, parameters.get(i));
+                }
+                
+                int rowsAffected = stmt.executeUpdate();
+                if (rowsAffected == 0) {
+                    throw new HeliosException("No rows affected during update - entity may not exist");
+                }
+                
+                return entity;
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to update entity", e);
+            }
+        });
     }
     
     @Override
@@ -86,9 +186,31 @@ public class PostgreSQLSession implements HeliosSession {
             throw new IllegalArgumentException("Entity cannot be null");
         }
         
-        // TODO: Implement delete logic
-        log.debug("Deleting entity {}", entity.getClass().getSimpleName());
-        return false;
+        EntityMetadata metadata = EntityMapper.getMetadata(entity.getClass());
+        Object idValue = metadata.getColumns().get(metadata.getIdField().getName()).getValue(entity);
+        
+        if (idValue == null) {
+            throw new HeliosException("Cannot delete entity without ID");
+        }
+        
+        log.debug("Deleting entity {} with id {}", entity.getClass().getSimpleName(), idValue);
+        
+        SqlBuilder.PreparedQuery query = SqlBuilder.buildDelete(metadata, entity);
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
+                // Set parameters
+                List<Object> parameters = query.getParameters();
+                for (int i = 0; i < parameters.size(); i++) {
+                    stmt.setObject(i + 1, parameters.get(i));
+                }
+                
+                int rowsAffected = stmt.executeUpdate();
+                return rowsAffected > 0;
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to delete entity", e);
+            }
+        });
     }
     
     @Override
@@ -114,9 +236,8 @@ public class PostgreSQLSession implements HeliosSession {
                 }
                 
                 try (ResultSet rs = stmt.executeQuery()) {
-                    // TODO: Map ResultSet to entities
-                    // For now, returning empty list
-                    return List.of();
+                    ResultSetMapper mapper = new ResultSetMapper();
+                    return mapper.mapToList(rs, resultClass);
                 }
             } catch (SQLException e) {
                 throw new HeliosException("Failed to execute native query", e);
@@ -154,8 +275,8 @@ public class PostgreSQLSession implements HeliosSession {
             throw new IllegalArgumentException("Entity cannot be null");
         }
         
-        // TODO: Implement relation loading
-        log.debug("Loading relation {} for entity {}", relationName, entity.getClass().getSimpleName());
+        RelationLoader relationLoader = new RelationLoader(this);
+        relationLoader.loadRelation(entity, relationName);
     }
     
     @Override
@@ -225,8 +346,17 @@ public class PostgreSQLSession implements HeliosSession {
             throw new HeliosException("Session is closed");
         }
         
-        // TODO: Implement flush logic - commit pending changes
-        log.debug("Flushing PostgreSQL session");
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            try {
+                currentTransaction.commit();
+                log.debug("PostgreSQL session flushed - transaction committed");
+            } catch (Exception e) {
+                log.error("Failed to flush session", e);
+                throw new HeliosException("Failed to flush session", e);
+            }
+        } else {
+            log.debug("No active transaction to flush");
+        }
     }
     
     @Override
@@ -235,8 +365,19 @@ public class PostgreSQLSession implements HeliosSession {
             throw new HeliosException("Session is closed");
         }
         
-        // TODO: Implement clear logic - clear session cache
-        log.debug("Clearing PostgreSQL session");
+        // Close current transaction without committing (rollback)
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            try {
+                currentTransaction.rollback();
+                currentTransaction = null;
+                log.debug("PostgreSQL session cleared - transaction rolled back");
+            } catch (Exception e) {
+                log.error("Failed to clear session", e);
+                throw new HeliosException("Failed to clear session", e);
+            }
+        } else {
+            log.debug("No active transaction to clear");
+        }
     }
     
     private boolean isClosed() {

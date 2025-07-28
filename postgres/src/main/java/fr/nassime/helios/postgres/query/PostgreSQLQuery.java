@@ -3,6 +3,9 @@ package fr.nassime.helios.postgres.query;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.query.QueryOperator;
 import fr.nassime.helios.api.query.SortDirection;
+import fr.nassime.helios.postgres.mapping.EntityMapper;
+import fr.nassime.helios.postgres.mapping.EntityMetadata;
+import fr.nassime.helios.postgres.mapping.ResultSetMapper;
 import fr.nassime.helios.postgres.session.PostgreSQLSession;
 import lombok.extern.slf4j.Slf4j;
 
@@ -93,11 +96,25 @@ public class PostgreSQLQuery<T> implements Query<T> {
     @Override
     public List<T> getResultList() {
         String sql = buildSelectQuery();
+        List<Object> parameters = buildParameters();
+        
         log.debug("Executing query: {} for entity {}", sql, entityClass.getSimpleName());
         
-        // TODO: Execute query and map results
-        // For now, returning empty list
-        return List.of();
+        return session.executeWithConnection(connection -> {
+            try (java.sql.PreparedStatement stmt = connection.prepareStatement(sql)) {
+                // Set parameters
+                for (int i = 0; i < parameters.size(); i++) {
+                    stmt.setObject(i + 1, parameters.get(i));
+                }
+                
+                try (java.sql.ResultSet rs = stmt.executeQuery()) {
+                    ResultSetMapper mapper = new ResultSetMapper();
+                    return mapper.mapToList(rs, entityClass);
+                }
+            } catch (java.sql.SQLException e) {
+                throw new fr.nassime.helios.api.exception.HeliosException("Failed to execute query", e);
+            }
+        });
     }
     
     @Override
@@ -124,11 +141,27 @@ public class PostgreSQLQuery<T> implements Query<T> {
     @Override
     public long count() {
         String sql = buildCountQuery();
+        List<Object> parameters = buildParameters();
+        
         log.debug("Executing count query: {} for entity {}", sql, entityClass.getSimpleName());
         
-        // TODO: Execute count query
-        // For now, returning 0
-        return 0L;
+        return session.executeWithConnection(connection -> {
+            try (java.sql.PreparedStatement stmt = connection.prepareStatement(sql)) {
+                // Set parameters
+                for (int i = 0; i < parameters.size(); i++) {
+                    stmt.setObject(i + 1, parameters.get(i));
+                }
+                
+                try (java.sql.ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getLong(1);
+                    }
+                    return 0L;
+                }
+            } catch (java.sql.SQLException e) {
+                throw new fr.nassime.helios.api.exception.HeliosException("Failed to execute count query", e);
+            }
+        });
     }
     
     /**
@@ -137,10 +170,22 @@ public class PostgreSQLQuery<T> implements Query<T> {
     private String buildSelectQuery() {
         StringBuilder sql = new StringBuilder();
         
-        // TODO: Get table name from entity metadata
-        String tableName = getTableName();
+        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
         
-        sql.append("SELECT * FROM ").append(tableName);
+        // SELECT clause with all columns
+        sql.append("SELECT ");
+        List<String> columns = new ArrayList<>();
+        for (String columnName : metadata.getColumnNames()) {
+            columns.add(columnName);
+        }
+        sql.append(String.join(", ", columns));
+        
+        // FROM clause
+        sql.append(" FROM ");
+        if (metadata.getSchema() != null) {
+            sql.append(metadata.getSchema()).append(".");
+        }
+        sql.append(metadata.getTableName());
         
         // WHERE clause
         if (!whereConditions.isEmpty()) {
@@ -213,22 +258,81 @@ public class PostgreSQLQuery<T> implements Query<T> {
                 case LESS_THAN_OR_EQUAL -> sql.append(" <= ?");
                 case LIKE -> sql.append(" LIKE ?");
                 case NOT_LIKE -> sql.append(" NOT LIKE ?");
-                case IN -> sql.append(" IN (?)"); // TODO: Handle multiple values
-                case NOT_IN -> sql.append(" NOT IN (?)"); // TODO: Handle multiple values
+                case IN -> {
+                    if (condition.value instanceof java.util.Collection<?> collection) {
+                        String placeholders = String.join(",", java.util.Collections.nCopies(collection.size(), "?"));
+                        sql.append(" IN (").append(placeholders).append(")");
+                    } else {
+                        sql.append(" IN (?)");
+                    }
+                }
+                case NOT_IN -> {
+                    if (condition.value instanceof java.util.Collection<?> collection) {
+                        String placeholders = String.join(",", java.util.Collections.nCopies(collection.size(), "?"));
+                        sql.append(" NOT IN (").append(placeholders).append(")");
+                    } else {
+                        sql.append(" NOT IN (?)");
+                    }
+                }
                 case IS_NULL -> sql.append(" IS NULL");
                 case IS_NOT_NULL -> sql.append(" IS NOT NULL");
-                case BETWEEN -> sql.append(" BETWEEN ? AND ?"); // TODO: Handle range values
-                case NOT_BETWEEN -> sql.append(" NOT BETWEEN ? AND ?"); // TODO: Handle range values
+                case BETWEEN -> {
+                    if (condition.value instanceof Object[] range && range.length == 2) {
+                        sql.append(" BETWEEN ? AND ?");
+                    } else {
+                        throw new IllegalArgumentException("BETWEEN operator requires an array of 2 values");
+                    }
+                }
+                case NOT_BETWEEN -> {
+                    if (condition.value instanceof Object[] range && range.length == 2) {
+                        sql.append(" NOT BETWEEN ? AND ?");
+                    } else {
+                        throw new IllegalArgumentException("NOT_BETWEEN operator requires an array of 2 values");
+                    }
+                }
             }
         }
+    }
+    
+    /**
+     * Build parameter list for prepared statement.
+     */
+    private List<Object> buildParameters() {
+        List<Object> parameters = new ArrayList<>();
+        
+        for (WhereCondition condition : whereConditions) {
+            switch (condition.operator) {
+                case IS_NULL, IS_NOT_NULL -> {
+                    // No parameters needed for these operators
+                }
+                case IN, NOT_IN -> {
+                    if (condition.value instanceof java.util.Collection<?> collection) {
+                        parameters.addAll(collection);
+                    } else {
+                        parameters.add(condition.value);
+                    }
+                }
+                case BETWEEN, NOT_BETWEEN -> {
+                    if (condition.value instanceof Object[] range && range.length == 2) {
+                        parameters.add(range[0]);
+                        parameters.add(range[1]);
+                    } else {
+                        throw new IllegalArgumentException("BETWEEN/NOT_BETWEEN operator requires an array of 2 values");
+                    }
+                }
+                default -> parameters.add(condition.value);
+            }
+        }
+        
+        return parameters;
     }
     
     /**
      * Get table name for the entity class.
      */
     private String getTableName() {
-        // TODO: Extract from @Entity annotation or use class name
-        return entityClass.getSimpleName().toLowerCase() + "s";
+        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
+        return metadata.getTableName();
     }
     
     /**
