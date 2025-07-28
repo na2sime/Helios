@@ -1,1 +1,8 @@
 rootProject.name = 'helios'
+
+// Core API module
+include 'api'
+
+// Database provider modules
+include 'postgres'
+include 'mongo'
