@@ -42,6 +42,7 @@ public class EntityMapper {
         Field idField = null;
         String idColumnName = null;
         boolean idGenerated = false;
+        GenerationType generationType = GenerationType.AUTO;
         Map<String, ColumnMetadata> columns = new HashMap<>();
         List<RelationMetadata> relations = new ArrayList<>();
         
@@ -57,7 +58,16 @@ public class EntityMapper {
                 }
                 idField = field;
                 idColumnName = getColumnName(field);
-                idGenerated = idAnnotation.strategy() != GenerationType.ASSIGNED;
+                
+                // Get GeneratedValue annotation to check strategy
+                GeneratedValue generatedValue = field.getAnnotation(GeneratedValue.class);
+                if (generatedValue != null) {
+                    generationType = generatedValue.strategy();
+                    idGenerated = generationType != GenerationType.ASSIGNED;
+                } else {
+                    generationType = GenerationType.ASSIGNED;
+                    idGenerated = false;
+                }
             }
             
             // Check for column mapping
@@ -84,6 +94,7 @@ public class EntityMapper {
                 .idField(idField)
                 .idColumnName(idColumnName)
                 .idGenerated(idGenerated)
+                .generationType(generationType)
                 .columns(columns)
                 .relations(relations)
                 .build();
@@ -240,7 +251,25 @@ public class EntityMapper {
                     .build();
         }
         
-        // Add other relationship types as needed...
+        OneToOne oneToOne = field.getAnnotation(OneToOne.class);
+        if (oneToOne != null) {
+            JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
+            String joinColumnName = joinColumn != null && !joinColumn.name().isEmpty()
+                    ? joinColumn.name()
+                    : camelToSnakeCase(field.getName()) + "_id";
+            
+            return RelationMetadata.builder()
+                    .field(field)
+                    .fieldName(field.getName())
+                    .targetEntity(oneToOne.targetEntity() != void.class ? oneToOne.targetEntity() : field.getType())
+                    .relationType(RelationMetadata.RelationType.ONE_TO_ONE)
+                    .fetchType(oneToOne.fetch())
+                    .cascadeTypes(oneToOne.cascade())
+                    .mappedBy(oneToOne.mappedBy())
+                    .joinColumn(joinColumnName)
+                    .optional(oneToOne.optional())
+                    .build();
+        }
         
         throw new HeliosException("Unsupported relation type for field: " + field.getName());
     }

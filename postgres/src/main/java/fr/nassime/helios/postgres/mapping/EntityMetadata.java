@@ -1,5 +1,6 @@
 package fr.nassime.helios.postgres.mapping;
 
+import fr.nassime.helios.api.annotations.enums.GenerationType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -20,6 +21,7 @@ public class EntityMetadata {
     private final Field idField;
     private final String idColumnName;
     private final boolean idGenerated;
+    private final GenerationType generationType;
     private final Map<String, ColumnMetadata> columns;
     private final List<RelationMetadata> relations;
     
