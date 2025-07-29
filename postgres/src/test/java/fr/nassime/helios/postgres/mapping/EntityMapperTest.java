@@ -13,7 +13,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for EntityMapper.
+ * Unit tests for EntityMapper. 
+ * These are true unit tests that don't require database connection.
  */
 class EntityMapperTest {
     

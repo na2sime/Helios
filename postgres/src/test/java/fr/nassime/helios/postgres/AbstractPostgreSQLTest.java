@@ -7,14 +7,17 @@ import fr.nassime.helios.postgres.session.PostgreSQLSessionFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Base class for PostgreSQL integration tests using TestContainers.
+ * These tests require Docker to be available.
  */
 @Testcontainers
+@DockerTestHelper.EnabledIfDockerAvailable
 public abstract class AbstractPostgreSQLTest {
     
     @Container
@@ -22,26 +25,39 @@ public abstract class AbstractPostgreSQLTest {
             .withDatabaseName("helios_test")
             .withUsername("test")
             .withPassword("test")
-            .withReuse(true);
+            .withReuse(true)
+            .withStartupTimeout(java.time.Duration.ofMinutes(5))
+            .withConnectTimeoutSeconds(60);
     
     protected static HeliosSessionFactory sessionFactory;
     protected HeliosSession session;
     
     @BeforeAll
     static void setupDatabase() {
-        // Create session factory
-        PostgreSQLConfiguration config = PostgreSQLConfiguration.builder()
-                .host(postgres.getHost())
-                .port(postgres.getFirstMappedPort())
-                .database(postgres.getDatabaseName())
-                .username(postgres.getUsername())
-                .password(postgres.getPassword())
-                .build();
-        
-        sessionFactory = new PostgreSQLSessionFactory(config);
-        
-        // Create database schema
-        createDatabaseSchema();
+        try {
+            // Wait for container to be ready
+            postgres.start();
+            if (!postgres.isRunning()) {
+                throw new RuntimeException("PostgreSQL container failed to start");
+            }
+            
+            // Create session factory
+            PostgreSQLConfiguration config = PostgreSQLConfiguration.builder()
+                    .host(postgres.getHost())
+                    .port(postgres.getFirstMappedPort())
+                    .database(postgres.getDatabaseName())
+                    .username(postgres.getUsername())
+                    .password(postgres.getPassword())
+                    .build();
+            
+            sessionFactory = new PostgreSQLSessionFactory(config);
+            
+            // Create database schema
+            createDatabaseSchema();
+        } catch (Exception e) {
+            System.err.println("Failed to setup test database: " + e.getMessage());
+            throw new RuntimeException("Cannot run integration tests without PostgreSQL container", e);
+        }
     }
     
     @BeforeEach
