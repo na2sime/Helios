@@ -3,8 +3,10 @@ rootProject.name = 'helios'
 // Core API module
 include 'api'
 
+// Common SQL module
+include 'sql'
+
 // Database provider modules
 include 'postgres'
+include 'mariadb'
 include 'mongo'
-include 'sql'
-include 'sql'

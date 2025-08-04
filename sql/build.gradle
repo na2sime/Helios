@@ -13,6 +13,9 @@ dependencies {
     // Compile dependency on api module
     api project(':api')
     
+    // HikariCP for connection pooling
+    implementation 'com.zaxxer:HikariCP:5.0.1'
+    
     // Lombok for generating boilerplate code
     compileOnly 'org.projectlombok:lombok:1.18.28'
     annotationProcessor 'org.projectlombok:lombok:1.18.28'

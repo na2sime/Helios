@@ -1,0 +1,28 @@
+dependencies {
+    // Core API dependency
+    api project(':api')
+    
+    // SQL common module dependency
+    implementation project(':sql')
+    
+    // MariaDB specific dependencies
+    implementation 'com.zaxxer:HikariCP:5.0.1'
+    implementation 'org.mariadb.jdbc:mariadb-java-client:3.3.2'
+    
+    // Core dependencies
+    implementation 'org.jetbrains:annotations:24.1.0'
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    
+    // Reflection utilities
+    implementation 'org.reflections:reflections:0.10.2'
+    
+    // Lombok for annotations
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+    
+    // Test dependencies for MariaDB
+    testImplementation 'org.testcontainers:mariadb:1.19.1'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.1'
+}
