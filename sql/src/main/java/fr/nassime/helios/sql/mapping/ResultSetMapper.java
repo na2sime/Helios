@@ -1,4 +1,4 @@
-package fr.nassime.helios.postgres.mapping;
+package fr.nassime.helios.sql.mapping;
 
 import fr.nassime.helios.api.exception.HeliosException;
 import lombok.extern.slf4j.Slf4j;

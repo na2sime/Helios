@@ -1,29 +1,31 @@
-package fr.nassime.helios.postgres.relation;
+package fr.nassime.helios.sql.relation;
 
 import fr.nassime.helios.api.exception.HeliosException;
-import fr.nassime.helios.postgres.mapping.EntityMapper;
-import fr.nassime.helios.postgres.mapping.EntityMetadata;
-import fr.nassime.helios.postgres.mapping.RelationMetadata;
-import fr.nassime.helios.postgres.mapping.ResultSetMapper;
-import fr.nassime.helios.postgres.session.PostgreSQLSession;
+import fr.nassime.helios.sql.mapping.EntityMapper;
+import fr.nassime.helios.sql.mapping.EntityMetadata;
+import fr.nassime.helios.sql.mapping.RelationMetadata;
+import fr.nassime.helios.sql.mapping.ResultSetMapper;
 import lombok.extern.slf4j.Slf4j;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Handles loading of entity relationships.
+ * Generic implementation that can be used by any SQL-based provider.
  */
 @Slf4j
 public class RelationLoader {
     
-    private final PostgreSQLSession session;
+    private final Function<Function<Connection, Object>, Object> connectionExecutor;
     
-    public RelationLoader(PostgreSQLSession session) {
-        this.session = session;
+    public RelationLoader(Function<Function<Connection, Object>, Object> connectionExecutor) {
+        this.connectionExecutor = connectionExecutor;
     }
     
     /**
@@ -77,7 +79,7 @@ public class RelationLoader {
         EntityMetadata targetMetadata = EntityMapper.getMetadata(relationMetadata.getTargetEntity());
         String sql = buildSelectByIdQuery(targetMetadata);
         
-        session.executeWithConnection(connection -> {
+        connectionExecutor.apply(connection -> {
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setObject(1, foreignKeyValue);
                 
@@ -115,7 +117,7 @@ public class RelationLoader {
         
         String sql = buildSelectByForeignKeyQuery(targetMetadata, joinColumn);
         
-        session.executeWithConnection(connection -> {
+        connectionExecutor.apply(connection -> {
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setObject(1, entityId);
                 
@@ -149,7 +151,7 @@ public class RelationLoader {
             String joinColumn = relationMetadata.getMappedBy();
             String sql = buildSelectByForeignKeyQuery(targetMetadata, joinColumn);
             
-            session.executeWithConnection(connection -> {
+            connectionExecutor.apply(connection -> {
                 try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                     stmt.setObject(1, entityId);
                     
@@ -175,10 +177,27 @@ public class RelationLoader {
             return;
         }
         
-        // For now, log that ManyToMany is not fully implemented
-        // In a full implementation, you'd need to handle join tables
-        log.warn("ManyToMany relation loading not fully implemented yet for relation: {}", relationMetadata.getFieldName());
-        relationMetadata.setValue(entity, new ArrayList<>());
+        EntityMetadata targetMetadata = EntityMapper.getMetadata(relationMetadata.getTargetEntity());
+        String joinTable = relationMetadata.getJoinTable();
+        String joinColumn = relationMetadata.getJoinColumn();
+        String inverseJoinColumn = relationMetadata.getInverseJoinColumn();
+        
+        String sql = buildSelectManyToManyQuery(targetMetadata, joinTable, joinColumn, inverseJoinColumn);
+        
+        connectionExecutor.apply(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setObject(1, entityId);
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    ResultSetMapper mapper = new ResultSetMapper();
+                    List<?> relatedEntities = mapper.mapToList(rs, relationMetadata.getTargetEntity());
+                    relationMetadata.setValue(entity, relatedEntities);
+                }
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to load ManyToMany relation", e);
+            }
+            return null;
+        });
     }
     
     /**
@@ -203,7 +222,7 @@ public class RelationLoader {
      * Derive join column name from entity class.
      */
     private String deriveJoinColumn(Class<?> entityClass) {
-        String className = entityClass.getSimpleName().toLowerCase();
+        String className = EntityMapper.camelToSnakeCase(entityClass.getSimpleName());
         return className + "_id";
     }
     
@@ -253,6 +272,35 @@ public class RelationLoader {
         sql.append(metadata.getTableName());
         
         sql.append(" WHERE ").append(foreignKeyColumn).append(" = ?");
+        
+        return sql.toString();
+    }
+    
+    /**
+     * Build SELECT query for ManyToMany relationships using join table.
+     */
+    private String buildSelectManyToManyQuery(EntityMetadata targetMetadata, String joinTable, 
+                                            String joinColumn, String inverseJoinColumn) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT ");
+        
+        // Add target entity columns with table alias
+        List<String> columns = new ArrayList<>();
+        for (String columnName : targetMetadata.getColumnNames()) {
+            columns.add("t." + columnName);
+        }
+        sql.append(String.join(", ", columns));
+        
+        sql.append(" FROM ");
+        if (targetMetadata.getSchema() != null) {
+            sql.append(targetMetadata.getSchema()).append(".");
+        }
+        sql.append(targetMetadata.getTableName()).append(" t");
+        
+        sql.append(" INNER JOIN ").append(joinTable).append(" jt");
+        sql.append(" ON t.").append(targetMetadata.getIdColumnName()).append(" = jt.").append(inverseJoinColumn);
+        
+        sql.append(" WHERE jt.").append(joinColumn).append(" = ?");
         
         return sql.toString();
     }

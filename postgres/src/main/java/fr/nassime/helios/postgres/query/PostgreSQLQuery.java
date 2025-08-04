@@ -3,9 +3,9 @@ package fr.nassime.helios.postgres.query;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.query.QueryOperator;
 import fr.nassime.helios.api.query.SortDirection;
-import fr.nassime.helios.postgres.mapping.EntityMapper;
-import fr.nassime.helios.postgres.mapping.EntityMetadata;
-import fr.nassime.helios.postgres.mapping.ResultSetMapper;
+import fr.nassime.helios.sql.mapping.EntityMapper;
+import fr.nassime.helios.sql.mapping.EntityMetadata;
+import fr.nassime.helios.sql.mapping.ResultSetMapper;
 import fr.nassime.helios.postgres.session.PostgreSQLSession;
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,6 +29,13 @@ public class PostgreSQLQuery<T> implements Query<T> {
     public PostgreSQLQuery(Class<T> entityClass, PostgreSQLSession session) {
         this.entityClass = entityClass;
         this.session = session;
+    }
+    
+    public PostgreSQLQuery(Class<T> entityClass, PostgreSQLSession session, String queryString) {
+        this.entityClass = entityClass;
+        this.session = session;
+        // For now, custom query strings are not implemented
+        // This constructor is needed for the createSqlQuery method in AbstractSqlSession
     }
     
     @Override

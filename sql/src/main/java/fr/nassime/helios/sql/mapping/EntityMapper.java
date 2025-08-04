@@ -1,4 +1,4 @@
-package fr.nassime.helios.postgres.mapping;
+package fr.nassime.helios.sql.mapping;
 
 import fr.nassime.helios.api.annotations.*;
 import fr.nassime.helios.api.annotations.enums.GenerationType;
@@ -6,6 +6,8 @@ import fr.nassime.helios.api.exception.HeliosException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -214,10 +216,7 @@ public class EntityMapper {
     /**
      * Analyze a relationship field.
      */
-    private static RelationMetadata analyzeRelation(Field field) {
-        // This is a simplified version - in a full implementation,
-        // you'd analyze all the relationship annotations
-        
+    private static RelationMetadata analyzeRelation(Field field) {        
         OneToMany oneToMany = field.getAnnotation(OneToMany.class);
         if (oneToMany != null) {
             return RelationMetadata.builder()
@@ -271,6 +270,38 @@ public class EntityMapper {
                     .build();
         }
         
+        ManyToMany manyToMany = field.getAnnotation(ManyToMany.class);
+        if (manyToMany != null) {
+            JoinTable joinTable = field.getAnnotation(JoinTable.class);
+            String joinTableName = joinTable != null && !joinTable.name().isEmpty()
+                    ? joinTable.name()
+                    : camelToSnakeCase(field.getDeclaringClass().getSimpleName()) + "_" + 
+                      camelToSnakeCase(field.getName());
+            
+            String joinColumnName = joinTable != null && joinTable.joinColumns().length > 0 && 
+                                  !joinTable.joinColumns()[0].name().isEmpty()
+                    ? joinTable.joinColumns()[0].name()
+                    : camelToSnakeCase(field.getDeclaringClass().getSimpleName()) + "_id";
+            
+            String inverseJoinColumnName = joinTable != null && joinTable.inverseJoinColumns().length > 0 && 
+                                         !joinTable.inverseJoinColumns()[0].name().isEmpty()
+                    ? joinTable.inverseJoinColumns()[0].name()
+                    : camelToSnakeCase(getGenericType(field).getSimpleName()) + "_id";
+            
+            return RelationMetadata.builder()
+                    .field(field)
+                    .fieldName(field.getName())
+                    .targetEntity(manyToMany.targetEntity() != void.class ? manyToMany.targetEntity() : getGenericType(field))
+                    .relationType(RelationMetadata.RelationType.MANY_TO_MANY)
+                    .fetchType(manyToMany.fetch())
+                    .cascadeTypes(manyToMany.cascade())
+                    .mappedBy(manyToMany.mappedBy())
+                    .joinTable(joinTableName)
+                    .joinColumn(joinColumnName)
+                    .inverseJoinColumn(inverseJoinColumnName)
+                    .build();
+        }
+        
         throw new HeliosException("Unsupported relation type for field: " + field.getName());
     }
     
@@ -278,14 +309,21 @@ public class EntityMapper {
      * Get generic type from collection field.
      */
     private static Class<?> getGenericType(Field field) {
-        // Simplified version - would need proper generic type resolution
+        Type genericType = field.getGenericType();
+        if (genericType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) genericType;
+            Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
+            if (actualTypeArguments.length > 0) {
+                return (Class<?>) actualTypeArguments[0];
+            }
+        }
         return Object.class;
     }
     
     /**
      * Convert camelCase to snake_case.
      */
-    private static String camelToSnakeCase(String camelCase) {
+    public static String camelToSnakeCase(String camelCase) {
         return camelCase.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
 }

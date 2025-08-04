@@ -1,10 +1,13 @@
 package fr.nassime.helios.postgres.mapping;
 
 import fr.nassime.helios.api.annotations.enums.GenerationType;
-import fr.nassime.helios.api.annotations.enums.RelationType;
 import fr.nassime.helios.postgres.entities.Post;
 import fr.nassime.helios.postgres.entities.User;
 import fr.nassime.helios.postgres.entities.UserProfile;
+import fr.nassime.helios.sql.mapping.ColumnMetadata;
+import fr.nassime.helios.sql.mapping.EntityMapper;
+import fr.nassime.helios.sql.mapping.EntityMetadata;
+import fr.nassime.helios.sql.mapping.RelationMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -65,7 +68,7 @@ class EntityMapperTest {
                 .filter(r -> "posts".equals(r.getFieldName()))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(RelationType.ONE_TO_MANY, postsRelation.getRelationType());
+        assertEquals(RelationMetadata.RelationType.ONE_TO_MANY, postsRelation.getRelationType());
         assertEquals(Post.class, postsRelation.getTargetEntity());
         assertEquals("author", postsRelation.getMappedBy());
         
@@ -73,7 +76,7 @@ class EntityMapperTest {
                 .filter(r -> "profile".equals(r.getFieldName()))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(RelationType.ONE_TO_ONE, profileRelation.getRelationType());
+        assertEquals(RelationMetadata.RelationType.ONE_TO_ONE, profileRelation.getRelationType());
         assertEquals(UserProfile.class, profileRelation.getTargetEntity());
         assertEquals("user", profileRelation.getMappedBy());
     }
@@ -93,7 +96,7 @@ class EntityMapperTest {
                 .filter(r -> "author".equals(r.getFieldName()))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(RelationType.MANY_TO_ONE, authorRelation.getRelationType());
+        assertEquals(RelationMetadata.RelationType.MANY_TO_ONE, authorRelation.getRelationType());
         assertEquals(User.class, authorRelation.getTargetEntity());
         assertEquals("author_id", authorRelation.getJoinColumn());
         
@@ -101,7 +104,7 @@ class EntityMapperTest {
                 .filter(r -> "comments".equals(r.getFieldName()))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(RelationType.ONE_TO_MANY, commentsRelation.getRelationType());
+        assertEquals(RelationMetadata.RelationType.ONE_TO_MANY, commentsRelation.getRelationType());
         assertEquals("post", commentsRelation.getMappedBy());
     }
     

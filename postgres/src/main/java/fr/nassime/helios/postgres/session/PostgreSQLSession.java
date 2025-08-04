@@ -1,36 +1,29 @@
 package fr.nassime.helios.postgres.session;
 
-import fr.nassime.helios.api.HeliosSession;
 import fr.nassime.helios.api.config.HeliosConfiguration;
-import fr.nassime.helios.api.exception.EntityNotFoundException;
 import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.transaction.Transaction;
 import fr.nassime.helios.postgres.connection.PostgreSQLConnectionManager;
-import fr.nassime.helios.postgres.mapping.EntityMapper;
-import fr.nassime.helios.postgres.mapping.EntityMetadata;
-import fr.nassime.helios.postgres.mapping.ResultSetMapper;
 import fr.nassime.helios.postgres.query.PostgreSQLQuery;
-import fr.nassime.helios.postgres.relation.RelationLoader;
-import fr.nassime.helios.postgres.sql.SqlBuilder;
+import fr.nassime.helios.postgres.sql.PostgreSQLSqlBuilder;
 import fr.nassime.helios.postgres.transaction.PostgreSQLTransaction;
+import fr.nassime.helios.sql.mapping.EntityMetadata;
+import fr.nassime.helios.sql.query.SqlBuilder;
+import fr.nassime.helios.sql.session.AbstractSqlSession;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
  * PostgreSQL implementation of HeliosSession.
+ * Extends AbstractSqlSession to inherit common SQL functionality.
  */
 @Slf4j
-public class PostgreSQLSession implements HeliosSession {
+public class PostgreSQLSession extends AbstractSqlSession {
     
     private final PostgreSQLConnectionManager connectionManager;
     private final HeliosConfiguration configuration;
@@ -38,245 +31,41 @@ public class PostgreSQLSession implements HeliosSession {
     private PostgreSQLTransaction currentTransaction;
     
     public PostgreSQLSession(PostgreSQLConnectionManager connectionManager, HeliosConfiguration configuration) {
+        super();
         this.connectionManager = connectionManager;
         this.configuration = configuration;
         log.debug("PostgreSQL session created");
     }
     
     @Override
-    public <T, ID> Optional<T> findById(Class<T> entityClass, ID id) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        if (id == null) {
-            return Optional.empty();
-        }
-        
-        log.debug("Finding entity {} with id {}", entityClass.getSimpleName(), id);
-        
-        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
-        SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectById(metadata);
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
-                stmt.setObject(1, id);
-                
-                try (ResultSet rs = stmt.executeQuery()) {
-                    ResultSetMapper mapper = new ResultSetMapper();
-                    T entity = mapper.mapToEntity(rs, entityClass);
-                    return Optional.ofNullable(entity);
-                }
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to find entity by ID", e);
-            }
-        });
+    protected SqlBuilder.PreparedQuery buildInsertQuery(EntityMetadata metadata, Object entity) {
+        // Use PostgreSQL-specific insert builder with RETURNING clause
+        return PostgreSQLSqlBuilder.buildInsert(metadata, entity);
     }
     
     @Override
-    public <T> List<T> findAll(Class<T> entityClass) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        log.debug("Finding all entities of type {}", entityClass.getSimpleName());
-        
-        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
-        SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectAll(metadata);
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query.getSql());
-                 ResultSet rs = stmt.executeQuery()) {
-                
-                ResultSetMapper mapper = new ResultSetMapper();
-                return mapper.mapToList(rs, entityClass);
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to find all entities", e);
-            }
-        });
+    protected Query createSqlQuery(String queryString) {
+        return new PostgreSQLQuery<>(Object.class, this, queryString);
     }
     
     @Override
-    public <T> T save(T entity) {
+    public <T> T executeWithConnection(Function<Connection, T> operation) {
         if (isClosed()) {
             throw new HeliosException("Session is closed");
         }
         
-        if (entity == null) {
-            throw new IllegalArgumentException("Entity cannot be null");
-        }
-        
-        @SuppressWarnings("unchecked")
-        Class<T> entityClass = (Class<T>) entity.getClass();
-        EntityMetadata metadata = EntityMapper.getMetadata(entityClass);
-        
-        // Check if entity has ID (update) or not (insert)
-        Object idValue = metadata.getColumns().get(metadata.getIdField().getName()).getValue(entity);
-        boolean isUpdate = idValue != null && (!(idValue instanceof Number) || ((Number) idValue).longValue() != 0);
-        
-        if (isUpdate) {
-            log.debug("Updating entity {} with id {}", entityClass.getSimpleName(), idValue);
-            return updateEntity(entity, metadata);
-        } else {
-            log.debug("Inserting new entity {}", entityClass.getSimpleName());
-            return insertEntity(entity, metadata);
-        }
-    }
-    
-    private <T> T insertEntity(T entity, EntityMetadata metadata) {
-        SqlBuilder.PreparedQuery query = SqlBuilder.buildInsert(metadata, entity);
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
-                // Set parameters
-                List<Object> parameters = query.getParameters();
-                for (int i = 0; i < parameters.size(); i++) {
-                    stmt.setObject(i + 1, parameters.get(i));
-                }
-                
-                if (metadata.isIdGenerated()) {
-                    // Get generated ID
-                    try (ResultSet rs = stmt.executeQuery()) {
-                        if (rs.next()) {
-                            Object generatedId = rs.getObject(1);
-                            metadata.getColumns().get(metadata.getIdField().getName()).setValue(entity, generatedId);
-                        }
-                    }
-                } else {
-                    stmt.executeUpdate();
-                }
-                
-                return entity;
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to insert entity", e);
+        Transaction tx = beginTransaction();
+        try {
+            Connection connection = ((PostgreSQLTransaction) tx).getConnection();
+            T result = operation.apply(connection);
+            tx.commit();
+            return result;
+        } catch (Exception e) {
+            if (tx.isActive()) {
+                tx.rollback();
             }
-        });
-    }
-    
-    private <T> T updateEntity(T entity, EntityMetadata metadata) {
-        SqlBuilder.PreparedQuery query = SqlBuilder.buildUpdate(metadata, entity);
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
-                // Set parameters
-                List<Object> parameters = query.getParameters();
-                for (int i = 0; i < parameters.size(); i++) {
-                    stmt.setObject(i + 1, parameters.get(i));
-                }
-                
-                int rowsAffected = stmt.executeUpdate();
-                if (rowsAffected == 0) {
-                    throw new HeliosException("No rows affected during update - entity may not exist");
-                }
-                
-                return entity;
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to update entity", e);
-            }
-        });
-    }
-    
-    @Override
-    public <T> boolean delete(T entity) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
+            throw e;
         }
-        
-        if (entity == null) {
-            throw new IllegalArgumentException("Entity cannot be null");
-        }
-        
-        EntityMetadata metadata = EntityMapper.getMetadata(entity.getClass());
-        Object idValue = metadata.getColumns().get(metadata.getIdField().getName()).getValue(entity);
-        
-        if (idValue == null) {
-            throw new HeliosException("Cannot delete entity without ID");
-        }
-        
-        log.debug("Deleting entity {} with id {}", entity.getClass().getSimpleName(), idValue);
-        
-        SqlBuilder.PreparedQuery query = SqlBuilder.buildDelete(metadata, entity);
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query.getSql())) {
-                // Set parameters
-                List<Object> parameters = query.getParameters();
-                for (int i = 0; i < parameters.size(); i++) {
-                    stmt.setObject(i + 1, parameters.get(i));
-                }
-                
-                int rowsAffected = stmt.executeUpdate();
-                return rowsAffected > 0;
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to delete entity", e);
-            }
-        });
-    }
-    
-    @Override
-    public <T> Query<T> createQuery(Class<T> entityClass) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        return new PostgreSQLQuery<>(entityClass, this);
-    }
-    
-    @Override
-    public <T> List<T> executeNativeQuery(String query, Class<T> resultClass, Object... parameters) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query)) {
-                // Set parameters
-                for (int i = 0; i < parameters.length; i++) {
-                    stmt.setObject(i + 1, parameters[i]);
-                }
-                
-                try (ResultSet rs = stmt.executeQuery()) {
-                    ResultSetMapper mapper = new ResultSetMapper();
-                    return mapper.mapToList(rs, resultClass);
-                }
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to execute native query", e);
-            }
-        });
-    }
-    
-    @Override
-    public int executeUpdate(String query, Object... parameters) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        return executeWithConnection(connection -> {
-            try (PreparedStatement stmt = connection.prepareStatement(query)) {
-                // Set parameters
-                for (int i = 0; i < parameters.length; i++) {
-                    stmt.setObject(i + 1, parameters[i]);
-                }
-                
-                return stmt.executeUpdate();
-            } catch (SQLException e) {
-                throw new HeliosException("Failed to execute update query", e);
-            }
-        });
-    }
-    
-    @Override
-    public <T> void loadRelation(T entity, String relationName) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        if (entity == null) {
-            throw new IllegalArgumentException("Entity cannot be null");
-        }
-        
-        RelationLoader relationLoader = new RelationLoader(this);
-        relationLoader.loadRelation(entity, relationName);
     }
     
     @Override
@@ -296,47 +85,6 @@ public class PostgreSQLSession implements HeliosSession {
             return currentTransaction;
         } catch (SQLException e) {
             throw new HeliosException("Failed to begin transaction", e);
-        }
-    }
-    
-    @Override
-    public <T> T executeInTransaction(Function<HeliosSession, T> operation) {
-        Transaction tx = beginTransaction();
-        try {
-            T result = operation.apply(this);
-            tx.commit();
-            return result;
-        } catch (Exception e) {
-            if (tx.isActive()) {
-                tx.rollback();
-            }
-            throw e;
-        }
-    }
-    
-    @Override
-    public void executeInTransaction(Consumer<HeliosSession> operation) {
-        executeInTransaction(session -> {
-            operation.accept(session);
-            return null;
-        });
-    }
-    
-    /**
-     * Execute operation with direct connection access.
-     */
-    public <T> T executeWithConnection(Function<Connection, T> operation) {
-        Transaction tx = beginTransaction();
-        try {
-            Connection connection = ((PostgreSQLTransaction) tx).getConnection();
-            T result = operation.apply(connection);
-            tx.commit();
-            return result;
-        } catch (Exception e) {
-            if (tx.isActive()) {
-                tx.rollback();
-            }
-            throw e;
         }
     }
     

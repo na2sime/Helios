@@ -1,4 +1,4 @@
-package fr.nassime.helios.postgres.mapping;
+package fr.nassime.helios.sql.mapping;
 
 import lombok.Builder;
 import lombok.Data;

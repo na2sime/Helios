@@ -1,4 +1,4 @@
-package fr.nassime.helios.postgres.mapping;
+package fr.nassime.helios.sql.mapping;
 
 import fr.nassime.helios.api.annotations.enums.GenerationType;
 import lombok.Builder;

@@ -6,3 +6,5 @@ include 'api'
 // Database provider modules
 include 'postgres'
 include 'mongo'
+include 'sql'
+include 'sql'

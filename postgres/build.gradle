@@ -2,6 +2,9 @@ dependencies {
     // Core API dependency
     api project(':api')
     
+    // SQL common module dependency
+    implementation project(':sql')
+    
     // PostgreSQL specific dependencies
     implementation 'com.zaxxer:HikariCP:5.0.1'
     implementation 'org.postgresql:postgresql:42.7.2'

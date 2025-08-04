@@ -1,14 +1,15 @@
-package fr.nassime.helios.postgres.sql;
+package fr.nassime.helios.sql.query;
 
-import fr.nassime.helios.postgres.mapping.ColumnMetadata;
-import fr.nassime.helios.postgres.mapping.EntityMetadata;
+import fr.nassime.helios.sql.mapping.ColumnMetadata;
+import fr.nassime.helios.sql.mapping.EntityMetadata;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
 
 /**
- * Builds SQL queries for PostgreSQL.
+ * Builds SQL queries for SQL databases.
+ * This is a generic implementation that can be extended by specific database providers.
  */
 public class SqlBuilder {
     
@@ -62,8 +63,17 @@ public class SqlBuilder {
     
     /**
      * Build INSERT query.
+     * This method can be overridden by database-specific implementations
+     * to handle database-specific features like RETURNING clause.
      */
     public static PreparedQuery buildInsert(EntityMetadata metadata, Object entity) {
+        return buildInsert(metadata, entity, false);
+    }
+    
+    /**
+     * Build INSERT query with option to return generated keys.
+     */
+    public static PreparedQuery buildInsert(EntityMetadata metadata, Object entity, boolean useReturningClause) {
         StringBuilder sql = new StringBuilder();
         sql.append("INSERT INTO ");
         
@@ -96,8 +106,8 @@ public class SqlBuilder {
         sql.append(placeholders);
         sql.append(")");
         
-        // Return generated ID if needed
-        if (metadata.isIdGenerated()) {
+        // Add RETURNING clause if supported and needed (PostgreSQL-specific)
+        if (useReturningClause && metadata.isIdGenerated()) {
             sql.append(" RETURNING ").append(metadata.getIdColumnName());
         }
         
@@ -157,6 +167,31 @@ public class SqlBuilder {
     }
     
     /**
+     * Build SELECT query for finding by foreign key.
+     */
+    public static PreparedQuery buildSelectByForeignKey(EntityMetadata metadata, String foreignKeyColumn, Object foreignKeyValue) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT ");
+        
+        // Add columns
+        StringJoiner columns = new StringJoiner(", ");
+        for (ColumnMetadata column : metadata.getColumns().values()) {
+            columns.add(column.getColumnName());
+        }
+        sql.append(columns);
+        
+        sql.append(" FROM ");
+        if (metadata.getSchema() != null) {
+            sql.append(metadata.getSchema()).append(".");
+        }
+        sql.append(metadata.getTableName());
+        
+        sql.append(" WHERE ").append(foreignKeyColumn).append(" = ?");
+        
+        return new PreparedQuery(sql.toString(), List.of(foreignKeyValue));
+    }
+    
+    /**
      * Represents a prepared SQL query with parameters.
      */
     public static class PreparedQuery {
@@ -165,7 +200,7 @@ public class SqlBuilder {
         
         public PreparedQuery(String sql, List<Object> parameters) {
             this.sql = sql;
-            this.parameters = parameters;
+            this.parameters = parameters != null ? parameters : List.of();
         }
         
         public String getSql() {
@@ -174,6 +209,11 @@ public class SqlBuilder {
         
         public List<Object> getParameters() {
             return parameters;
+        }
+        
+        @Override
+        public String toString() {
+            return "PreparedQuery{sql='" + sql + "', parameters=" + parameters + "}";
         }
     }
 }
