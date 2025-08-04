@@ -127,9 +127,13 @@ public abstract class AbstractSqlSession implements HeliosSession {
     
     @Override
     public <T> Query<T> createQuery(Class<T> entityClass) {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("createQuery(Class<T>) not implemented yet");
+        return createEntityQuery(entityClass);
     }
+    
+    /**
+     * Create an entity-based query. Should be implemented by subclasses.
+     */
+    protected abstract <T> Query<T> createEntityQuery(Class<T> entityClass);
     
     @Override
     public <T> List<T> executeNativeQuery(String query, Class<T> resultClass, Object... parameters) {
@@ -139,20 +143,69 @@ public abstract class AbstractSqlSession implements HeliosSession {
     
     @Override
     public int executeUpdate(String query, Object... parameters) {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("executeUpdate not implemented yet");
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("Query cannot be null or empty");
+        }
+        
+        log.debug("Executing update query: {}", query);
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
+                // Set parameters if provided
+                if (parameters != null && parameters.length > 0) {
+                    for (int i = 0; i < parameters.length; i++) {
+                        stmt.setObject(i + 1, parameters[i]);
+                    }
+                }
+                
+                int rowsAffected = stmt.executeUpdate();
+                log.debug("Update query affected {} rows", rowsAffected);
+                return rowsAffected;
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to execute update query: " + query, e);
+            }
+        });
     }
     
     @Override
     public <T> T executeInTransaction(Function<HeliosSession, T> operation) {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("executeInTransaction not implemented yet");
+        if (operation == null) {
+            throw new IllegalArgumentException("Operation cannot be null");
+        }
+        
+        Transaction tx = beginTransaction();
+        try {
+            T result = operation.apply(this);
+            tx.commit();
+            log.debug("Transaction completed successfully");
+            return result;
+        } catch (Exception e) {
+            if (tx.isActive()) {
+                tx.rollback();
+                log.debug("Transaction rolled back due to exception: {}", e.getMessage());
+            }
+            throw e;
+        }
     }
     
     @Override
     public void executeInTransaction(java.util.function.Consumer<HeliosSession> operation) {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("executeInTransaction not implemented yet");
+        if (operation == null) {
+            throw new IllegalArgumentException("Operation cannot be null");
+        }
+        
+        Transaction tx = beginTransaction();
+        try {
+            operation.accept(this);
+            tx.commit();
+            log.debug("Transaction completed successfully");
+        } catch (Exception e) {
+            if (tx.isActive()) {
+                tx.rollback();
+                log.debug("Transaction rolled back due to exception: {}", e.getMessage());
+            }
+            throw e;
+        }
     }
     
     @Override

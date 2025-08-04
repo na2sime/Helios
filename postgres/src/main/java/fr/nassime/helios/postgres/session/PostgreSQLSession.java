@@ -49,22 +49,31 @@ public class PostgreSQLSession extends AbstractSqlSession {
     }
     
     @Override
+    protected <T> Query<T> createEntityQuery(Class<T> entityClass) {
+        return new PostgreSQLQuery<>(entityClass, this);
+    }
+    
+    @Override
     public <T> T executeWithConnection(Function<Connection, T> operation) {
         if (isClosed()) {
             throw new HeliosException("Session is closed");
         }
         
-        Transaction tx = beginTransaction();
         try {
-            Connection connection = ((PostgreSQLTransaction) tx).getConnection();
-            T result = operation.apply(connection);
-            tx.commit();
-            return result;
-        } catch (Exception e) {
-            if (tx.isActive()) {
-                tx.rollback();
+            Connection connection = connectionManager.getConnection();
+            connection.setAutoCommit(false);
+            try {
+                T result = operation.apply(connection);
+                connection.commit();
+                return result;
+            } catch (Exception e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.close();
             }
-            throw e;
+        } catch (SQLException e) {
+            throw new HeliosException("Database operation failed", e);
         }
     }
     
