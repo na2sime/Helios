@@ -117,9 +117,16 @@ public class EntityMapper {
     }
     
     /**
-     * Get table name from entity annotation or class name.
+     * Get table name from @Table annotation, @Entity annotation, or class name.
      */
     private static String getTableName(Class<?> entityClass, Entity entityAnnotation) {
+        // First check for @Table annotation
+        Table tableAnnotation = entityClass.getAnnotation(Table.class);
+        if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
+            return tableAnnotation.name();
+        }
+        
+        // Then check @Entity annotation
         if (!entityAnnotation.table().isEmpty()) {
             return entityAnnotation.table();
         }
@@ -134,10 +141,13 @@ public class EntityMapper {
     }
     
     /**
-     * Get schema name (could be extended to support @Table annotation).
+     * Get schema name from @Table annotation.
      */
     private static String getSchema(Class<?> entityClass) {
-        // For now, return null - could be extended later
+        Table tableAnnotation = entityClass.getAnnotation(Table.class);
+        if (tableAnnotation != null && !tableAnnotation.schema().isEmpty()) {
+            return tableAnnotation.schema();
+        }
         return null;
     }
     
