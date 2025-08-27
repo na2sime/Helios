@@ -110,10 +110,14 @@ public class RelationLoader {
         EntityMetadata targetMetadata = EntityMapper.getMetadata(relationMetadata.getTargetEntity());
         String mappedBy = relationMetadata.getMappedBy();
         
-        // If mappedBy is specified, use it; otherwise derive the join column
-        String joinColumn = mappedBy.isEmpty() 
-            ? deriveJoinColumn(entityMetadata.getEntityClass()) 
-            : mappedBy;
+        // If mappedBy is specified, find the corresponding join column; otherwise derive it
+        String joinColumn;
+        if (mappedBy.isEmpty()) {
+            joinColumn = deriveJoinColumn(entityMetadata.getEntityClass());
+        } else {
+            // mappedBy refers to the field name in the target entity, need to find the corresponding join column
+            joinColumn = findJoinColumnForMappedBy(targetMetadata, mappedBy);
+        }
         
         String sql = buildSelectByForeignKeyQuery(targetMetadata, joinColumn);
         
@@ -148,7 +152,7 @@ public class RelationLoader {
             }
             
             EntityMetadata targetMetadata = EntityMapper.getMetadata(relationMetadata.getTargetEntity());
-            String joinColumn = relationMetadata.getMappedBy();
+            String joinColumn = findJoinColumnForMappedBy(targetMetadata, relationMetadata.getMappedBy());
             String sql = buildSelectByForeignKeyQuery(targetMetadata, joinColumn);
             
             connectionExecutor.apply(connection -> {
@@ -224,6 +228,21 @@ public class RelationLoader {
     private String deriveJoinColumn(Class<?> entityClass) {
         String className = EntityMapper.camelToSnakeCase(entityClass.getSimpleName());
         return className + "_id";
+    }
+    
+    /**
+     * Find the join column name for a mappedBy field name.
+     */
+    private String findJoinColumnForMappedBy(EntityMetadata targetMetadata, String mappedByFieldName) {
+        // Look for a relation in the target entity that matches the mappedBy field name
+        return targetMetadata.getRelations().stream()
+                .filter(relation -> relation.getFieldName().equals(mappedByFieldName))
+                .map(RelationMetadata::getJoinColumn)
+                .findFirst()
+                .orElseThrow(() -> new HeliosException(
+                    "Could not find join column for mappedBy field: " + mappedByFieldName + 
+                    " in entity: " + targetMetadata.getEntityClass().getSimpleName()
+                ));
     }
     
     /**

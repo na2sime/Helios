@@ -29,6 +29,9 @@ public class UserProfile {
     @Column(name = "avatar_url")
     private String avatarUrl;
     
+    @Column(name = "user_id")
+    private Long userId;
+    
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user;

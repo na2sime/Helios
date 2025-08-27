@@ -25,6 +25,12 @@ public class Comment {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
     
+    @Column(name = "post_id")
+    private Long postId;
+    
+    @Column(name = "author_id")
+    private Long authorId;
+    
     @ManyToOne
     @JoinColumn(name = "post_id")
     private Post post;

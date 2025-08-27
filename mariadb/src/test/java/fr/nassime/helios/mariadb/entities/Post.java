@@ -38,6 +38,9 @@ public class Post {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
+    @Column(name = "author_id")
+    private Long authorId;
+    
     @ManyToOne
     @JoinColumn(name = "author_id")
     private User author;

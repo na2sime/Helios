@@ -103,6 +103,13 @@ public abstract class AbstractSqlSession implements HeliosSession {
         }
         
         EntityMetadata metadata = EntityMapper.getMetadata(entity.getClass());
+        
+        // Verify entity has an ID
+        Object id = metadata.getColumns().get(metadata.getIdField().getName()).getValue(entity);
+        if (id == null) {
+            throw new HeliosException("Cannot delete entity without ID: " + entity.getClass().getSimpleName());
+        }
+        
         SqlBuilder.PreparedQuery query = SqlBuilder.buildDelete(metadata, entity);
         
         log.debug("Deleting entity of type: {}", entity.getClass().getSimpleName());
