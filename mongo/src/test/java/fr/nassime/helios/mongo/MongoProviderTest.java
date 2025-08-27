@@ -2,11 +2,13 @@ package fr.nassime.helios.mongo;
 
 import fr.nassime.helios.api.HeliosSessionFactory;
 import fr.nassime.helios.api.config.HeliosConfiguration;
+import fr.nassime.helios.api.config.ConnectionPoolConfig;
 import fr.nassime.helios.api.exception.HeliosException;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -122,6 +124,48 @@ class MongoProviderTest {
         }
         
         @Override
+        public String getProvider() {
+            return "mongodb";
+        }
+        
+        @Override
+        public String getConnectionUrl() {
+            return properties.get("mongo.connectionString");
+        }
+        
+        @Override
+        public String getUsername() {
+            return null;
+        }
+        
+        @Override
+        public String getPassword() {
+            return null;
+        }
+        
+        @Override
+        public String getDatabase() {
+            return properties.get("mongo.database");
+        }
+        
+        @Override
+        public String getSchema() {
+            return null;
+        }
+        
+        @Override
+        public ConnectionPoolConfig getConnectionPoolConfig() {
+            return null;
+        }
+        
+        @Override
+        public Properties getProperties() {
+            Properties props = new Properties();
+            props.putAll(properties);
+            return props;
+        }
+        
+        @Override
         public String getProperty(String key) {
             return properties.get(key);
         }
@@ -132,13 +176,10 @@ class MongoProviderTest {
         }
         
         @Override
-        public Map<String, String> getAllProperties() {
-            return new HashMap<>(properties);
-        }
-        
-        @Override
-        public boolean hasProperty(String key) {
-            return properties.containsKey(key);
+        public Map<String, Object> toMap() {
+            Map<String, Object> map = new HashMap<>();
+            map.putAll(properties);
+            return map;
         }
     }
 }

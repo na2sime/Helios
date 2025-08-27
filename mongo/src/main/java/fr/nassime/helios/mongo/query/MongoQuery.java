@@ -19,6 +19,8 @@ import java.util.Optional;
 
 import static com.mongodb.client.model.Filters.*;
 import static com.mongodb.client.model.Sorts.*;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
 
 /**
  * MongoDB implementation of Query interface.
@@ -83,10 +85,10 @@ public class MongoQuery<T> implements Query<T> {
         
         // Create OR condition with existing filters
         Bson newFilter = buildFilter(field, operator, value);
-        Bson existingFilters = filters.size() == 1 ? filters.get(0) : and(filters);
+        Bson existingFilters = filters.size() == 1 ? filters.get(0) : Filters.and(filters);
         
         filters.clear();
-        filters.add(or(existingFilters, newFilter));
+        filters.add(Filters.or(existingFilters, newFilter));
         return this;
     }
     
@@ -128,14 +130,14 @@ public class MongoQuery<T> implements Query<T> {
             
             // Apply filters
             if (!filters.isEmpty()) {
-                Bson combinedFilter = filters.size() == 1 ? filters.get(0) : and(filters);
+                Bson combinedFilter = filters.size() == 1 ? filters.get(0) : Filters.and(filters);
                 findIterable = findIterable.filter(combinedFilter);
                 log.debug("Applied filters: {}", combinedFilter);
             }
             
             // Apply sorting
             if (!sorts.isEmpty()) {
-                Bson combinedSort = sorts.size() == 1 ? sorts.get(0) : orderBy(sorts);
+                Bson combinedSort = sorts.size() == 1 ? sorts.get(0) : Sorts.orderBy(sorts);
                 findIterable = findIterable.sort(combinedSort);
                 log.debug("Applied sorting");
             }
@@ -198,7 +200,7 @@ public class MongoQuery<T> implements Query<T> {
             if (filters.isEmpty()) {
                 count = collection.countDocuments();
             } else {
-                Bson combinedFilter = filters.size() == 1 ? filters.get(0) : and(filters);
+                Bson combinedFilter = filters.size() == 1 ? filters.get(0) : Filters.and(filters);
                 count = collection.countDocuments(combinedFilter);
             }
             
@@ -244,14 +246,14 @@ public class MongoQuery<T> implements Query<T> {
             case IS_NOT_NULL -> ne(field, null);
             case BETWEEN -> {
                 if (value instanceof Object[] range && range.length == 2) {
-                    yield and(gte(field, range[0]), lte(field, range[1]));
+                    yield Filters.and(gte(field, range[0]), lte(field, range[1]));
                 } else {
                     throw new IllegalArgumentException("BETWEEN operator requires an array of exactly 2 values");
                 }
             }
             case NOT_BETWEEN -> {
                 if (value instanceof Object[] range && range.length == 2) {
-                    yield or(lt(field, range[0]), gt(field, range[1]));
+                    yield Filters.or(lt(field, range[0]), gt(field, range[1]));
                 } else {
                     throw new IllegalArgumentException("NOT_BETWEEN operator requires an array of exactly 2 values");
                 }

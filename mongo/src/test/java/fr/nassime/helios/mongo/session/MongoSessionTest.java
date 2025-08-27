@@ -40,9 +40,10 @@ class MongoSessionTest extends AbstractMongoTest {
         assertTrue(savedUser.getActive());
         
         // Find by ID
-        User foundUser = session.findById(User.class, savedUser.getId());
+        Optional<User> foundUserOpt = session.findById(User.class, savedUser.getId());
         
-        assertNotNull(foundUser);
+        assertTrue(foundUserOpt.isPresent());
+        User foundUser = foundUserOpt.get();
         assertEquals(savedUser.getId(), foundUser.getId());
         assertEquals("john_doe", foundUser.getUsername());
         assertEquals("john@example.com", foundUser.getEmail());
@@ -52,8 +53,8 @@ class MongoSessionTest extends AbstractMongoTest {
     
     @Test
     void testFindByIdNotFound() {
-        User notFound = session.findById(User.class, "nonexistent_id");
-        assertNull(notFound);
+        Optional<User> notFound = session.findById(User.class, "nonexistent_id");
+        assertFalse(notFound.isPresent());
     }
     
     @Test
@@ -77,8 +78,9 @@ class MongoSessionTest extends AbstractMongoTest {
         assertTrue(updatedUser.getActive());
         
         // Verify in database
-        User foundUser = session.findById(User.class, originalId);
-        assertNotNull(foundUser);
+        Optional<User> foundUserOpt = session.findById(User.class, originalId);
+        assertTrue(foundUserOpt.isPresent());
+        User foundUser = foundUserOpt.get();
         assertEquals("jane.updated@example.com", foundUser.getEmail());
         assertEquals(31, foundUser.getAge());
     }
@@ -127,15 +129,15 @@ class MongoSessionTest extends AbstractMongoTest {
         String userId = savedUser.getId();
         
         // Verify user exists
-        User foundUser = session.findById(User.class, userId);
-        assertNotNull(foundUser);
+        Optional<User> foundUserOpt = session.findById(User.class, userId);
+        assertTrue(foundUserOpt.isPresent());
         
         // Delete user
         session.deleteById(User.class, userId);
         
         // Verify user is deleted
-        User deletedUser = session.findById(User.class, userId);
-        assertNull(deletedUser);
+        Optional<User> deletedUserOpt = session.findById(User.class, userId);
+        assertFalse(deletedUserOpt.isPresent());
     }
     
     @Test
@@ -148,8 +150,8 @@ class MongoSessionTest extends AbstractMongoTest {
         session.delete(savedUser);
         
         // Verify user is deleted
-        User deletedUser = session.findById(User.class, savedUser.getId());
-        assertNull(deletedUser);
+        Optional<User> deletedUserOpt = session.findById(User.class, savedUser.getId());
+        assertFalse(deletedUserOpt.isPresent());
     }
     
     @Test

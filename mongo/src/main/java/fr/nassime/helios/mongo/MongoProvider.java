@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 public class MongoProvider implements HeliosProvider {
     
     private static final String PROVIDER_NAME = "mongodb";
+    private static final String PROVIDER_VERSION = "1.0.0";
     
     @Override
     public String getName() {
@@ -23,10 +24,35 @@ public class MongoProvider implements HeliosProvider {
     }
     
     @Override
+    public String getVersion() {
+        return PROVIDER_VERSION;
+    }
+    
+    @Override
+    public boolean supports(HeliosConfiguration configuration) {
+        return configuration.getProperty("mongo.connectionString") != null && 
+               configuration.getProperty("mongo.database") != null;
+    }
+    
+    @Override
+    public void validateConfiguration(HeliosConfiguration configuration) {
+        String connectionString = configuration.getProperty("mongo.connectionString");
+        if (connectionString == null || connectionString.trim().isEmpty()) {
+            throw new HeliosException("MongoDB connection string is required (mongo.connectionString)");
+        }
+        
+        String database = configuration.getProperty("mongo.database");
+        if (database == null || database.trim().isEmpty()) {
+            throw new HeliosException("MongoDB database name is required (mongo.database)");
+        }
+    }
+    
+    @Override
     public HeliosSessionFactory createSessionFactory(HeliosConfiguration configuration) {
         log.info("Creating MongoDB session factory");
         
         try {
+            validateConfiguration(configuration);
             MongoConfiguration mongoConfig = extractMongoConfiguration(configuration);
             return new MongoSessionFactory(mongoConfig);
         } catch (Exception e) {
@@ -40,14 +66,7 @@ public class MongoProvider implements HeliosProvider {
      */
     private MongoConfiguration extractMongoConfiguration(HeliosConfiguration configuration) {
         String connectionString = configuration.getProperty("mongo.connectionString");
-        if (connectionString == null || connectionString.trim().isEmpty()) {
-            throw new HeliosException("MongoDB connection string is required (mongo.connectionString)");
-        }
-        
         String database = configuration.getProperty("mongo.database");
-        if (database == null || database.trim().isEmpty()) {
-            throw new HeliosException("MongoDB database name is required (mongo.database)");
-        }
         
         MongoConfiguration.MongoConfigurationBuilder builder = MongoConfiguration.builder()
             .connectionString(connectionString.trim())

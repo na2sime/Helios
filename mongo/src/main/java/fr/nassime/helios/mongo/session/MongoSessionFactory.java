@@ -21,6 +21,7 @@ public class MongoSessionFactory implements HeliosSessionFactory {
     
     private final MongoConfiguration configuration;
     private final MongoClient mongoClient;
+    private volatile boolean closed = false;
     
     public MongoSessionFactory(MongoConfiguration configuration) {
         this.configuration = configuration;
@@ -30,13 +31,36 @@ public class MongoSessionFactory implements HeliosSessionFactory {
     
     @Override
     public HeliosSession openSession() {
+        if (closed) {
+            throw new IllegalStateException("SessionFactory is closed");
+        }
         log.debug("Opening MongoDB session");
         return new MongoSession(mongoClient, configuration.getDatabase());
     }
     
     @Override
+    public HeliosSession getCurrentSession() {
+        // MongoDB doesn't have the concept of "current session" like Hibernate
+        // Each call creates a new lightweight session
+        return openSession();
+    }
+    
+    @Override
+    public fr.nassime.helios.api.config.HeliosConfiguration getConfiguration() {
+        // We need to adapt MongoConfiguration to HeliosConfiguration
+        // For now, return null as this is used mainly for debugging
+        return null;
+    }
+    
+    @Override
+    public boolean isClosed() {
+        return closed;
+    }
+    
+    @Override
     public void close() {
         log.info("Closing MongoDB session factory");
+        closed = true;
         if (mongoClient != null) {
             mongoClient.close();
         }
