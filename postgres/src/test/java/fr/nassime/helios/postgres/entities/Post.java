@@ -39,6 +39,9 @@ public class Post {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
+    @Column(name = "author_id")
+    private Long authorId;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id")
     private User author;
@@ -63,5 +66,6 @@ public class Post {
         this.title = title;
         this.content = content;
         this.author = author;
+        this.authorId = author != null ? author.getId() : null;
     }
 }

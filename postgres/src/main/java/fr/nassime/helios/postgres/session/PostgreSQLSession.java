@@ -59,6 +59,12 @@ public class PostgreSQLSession extends AbstractSqlSession {
             throw new HeliosException("Session is closed");
         }
         
+        // If we have an active transaction, use its connection
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            return operation.apply(currentTransaction.getConnection());
+        }
+        
+        // No active transaction - create a new connection and manage it automatically
         try {
             Connection connection = connectionManager.getConnection();
             connection.setAutoCommit(false);
@@ -106,6 +112,7 @@ public class PostgreSQLSession extends AbstractSqlSession {
         if (currentTransaction != null && currentTransaction.isActive()) {
             try {
                 currentTransaction.commit();
+                currentTransaction = null;
                 log.debug("PostgreSQL session flushed - transaction committed");
             } catch (Exception e) {
                 log.error("Failed to flush session", e);

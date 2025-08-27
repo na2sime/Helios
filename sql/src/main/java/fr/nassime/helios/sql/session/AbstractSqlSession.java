@@ -137,8 +137,33 @@ public abstract class AbstractSqlSession implements HeliosSession {
     
     @Override
     public <T> List<T> executeNativeQuery(String query, Class<T> resultClass, Object... parameters) {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("executeNativeQuery not implemented yet");
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("Query cannot be null or empty");
+        }
+        if (resultClass == null) {
+            throw new IllegalArgumentException("Result class cannot be null");
+        }
+        
+        log.debug("Executing native query: {} with result class: {}", query, resultClass.getSimpleName());
+        
+        return executeWithConnection(connection -> {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
+                // Set parameters if provided
+                if (parameters != null && parameters.length > 0) {
+                    for (int i = 0; i < parameters.length; i++) {
+                        stmt.setObject(i + 1, parameters[i]);
+                    }
+                }
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<T> results = resultSetMapper.mapToList(rs, resultClass);
+                    log.debug("Native query returned {} results", results.size());
+                    return results;
+                }
+            } catch (SQLException e) {
+                throw new HeliosException("Failed to execute native query: " + query, e);
+            }
+        });
     }
     
     @Override

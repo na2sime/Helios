@@ -30,6 +30,9 @@ public class UserProfile {
     @Column(name = "avatar_url")
     private String avatarUrl;
     
+    @Column(name = "user_id")
+    private Long userId;
+    
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
@@ -39,5 +42,6 @@ public class UserProfile {
     public UserProfile(String bio, User user) {
         this.bio = bio;
         this.user = user;
+        this.userId = user != null ? user.getId() : null;
     }
 }

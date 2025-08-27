@@ -26,6 +26,12 @@ public class Comment {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
     
+    @Column(name = "post_id")
+    private Long postId;
+    
+    @Column(name = "author_id")
+    private Long authorId;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id")
     private Post post;
@@ -43,5 +49,7 @@ public class Comment {
         this.content = content;
         this.post = post;
         this.author = author;
+        this.postId = post != null ? post.getId() : null;
+        this.authorId = author != null ? author.getId() : null;
     }
 }
