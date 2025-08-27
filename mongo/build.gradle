@@ -12,6 +12,12 @@ dependencies {
     
     // Reflection utilities
     implementation 'org.reflections:reflections:0.10.2'
+
+    // Lombok for annotations
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
     
     // Test dependencies for MongoDB
     testImplementation 'org.testcontainers:mongodb:1.19.1'

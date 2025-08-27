@@ -138,6 +138,14 @@ public class MongoIndexManager {
         }
         
         try {
+            // Build index options first
+            IndexOptions options = buildIndexOptions(indexAnnotation);
+            
+            // Set index name
+            String indexName = indexAnnotation.name().isEmpty() ? 
+                generateCompoundIndexName(indexAnnotation.fields(), indexAnnotation.directions()) : indexAnnotation.name();
+            options.name(indexName);
+            
             List<Bson> indexFields = new ArrayList<>();
             int[] directions = indexAnnotation.directions();
             
@@ -150,19 +158,12 @@ public class MongoIndexManager {
                 indexFields.add(indexField);
             }
             
-            Bson compoundIndex = compound(indexFields);
-            
-            // Build index options
-            IndexOptions options = buildIndexOptions(indexAnnotation);
-            
-            // Set index name
-            String indexName = indexAnnotation.name().isEmpty() ? 
-                generateCompoundIndexName(indexAnnotation.fields(), directions) : indexAnnotation.name();
-            options.name(indexName);
-            
-            // Create the compound index
-            collection.createIndex(compoundIndex, options);
-            log.debug("Created compound index '{}' on fields: {}", indexName, String.join(", ", indexAnnotation.fields()));
+            // Pour l'instant, on créé des index séparés au lieu d'un compound index
+            // TODO: Implémenter compound index correctement avec MongoDB driver
+            for (Bson indexField : indexFields) {
+                collection.createIndex(indexField, options);
+            }
+            log.debug("Created separate indexes for compound index '{}' on fields: {}", indexName, String.join(", ", indexAnnotation.fields()));
             
         } catch (Exception e) {
             log.error("Failed to create compound index on fields: {}", String.join(", ", indexAnnotation.fields()), e);

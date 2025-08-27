@@ -198,6 +198,26 @@ public class DocumentMapper {
     }
     
     /**
+     * Get the document field name for a Java field (for index creation).
+     */
+    public String getFieldName(java.lang.reflect.Field field) {
+        String documentFieldName = field.getName();
+        
+        // Check if field has @Id annotation - maps to _id
+        if (field.isAnnotationPresent(Id.class)) {
+            return "_id";
+        }
+        
+        // Check if field has @Field annotation with custom name
+        Field fieldAnnotation = field.getAnnotation(Field.class);
+        if (fieldAnnotation != null && !fieldAnnotation.name().isEmpty()) {
+            documentFieldName = fieldAnnotation.name();
+        }
+        
+        return documentFieldName;
+    }
+
+    /**
      * Get metadata for entity class.
      */
     private DocumentMetadata getMetadata(Class<?> entityClass) {
