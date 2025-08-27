@@ -4,7 +4,6 @@ import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.transaction.Transaction;
 import fr.nassime.helios.mariadb.query.MariaDBQuery;
-import fr.nassime.helios.mariadb.sql.MariaDBSqlBuilder;
 import fr.nassime.helios.mariadb.transaction.MariaDBTransaction;
 import fr.nassime.helios.sql.mapping.EntityMetadata;
 import fr.nassime.helios.sql.query.SqlBuilder;
@@ -46,8 +45,8 @@ public class MariaDBSession extends AbstractSqlSession {
     
     @Override
     protected SqlBuilder.PreparedQuery buildInsertQuery(EntityMetadata metadata, Object entity) {
-        // Use MariaDB-specific insert builder
-        return MariaDBSqlBuilder.buildInsert(metadata, entity);
+        // Use standard SQL insert builder
+        return SqlBuilder.buildInsert(metadata, entity);
     }
     
     @Override

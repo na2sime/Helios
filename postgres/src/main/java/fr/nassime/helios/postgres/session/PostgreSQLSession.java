@@ -1,16 +1,15 @@
 package fr.nassime.helios.postgres.session;
 
-import fr.nassime.helios.api.config.HeliosConfiguration;
 import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.transaction.Transaction;
-import fr.nassime.helios.postgres.connection.PostgreSQLConnectionManager;
 import fr.nassime.helios.postgres.query.PostgreSQLQuery;
 import fr.nassime.helios.postgres.sql.PostgreSQLSqlBuilder;
 import fr.nassime.helios.postgres.transaction.PostgreSQLTransaction;
 import fr.nassime.helios.sql.mapping.EntityMetadata;
 import fr.nassime.helios.sql.query.SqlBuilder;
 import fr.nassime.helios.sql.session.AbstractSqlSession;
+import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
@@ -25,15 +24,13 @@ import java.util.function.Function;
 @Slf4j
 public class PostgreSQLSession extends AbstractSqlSession {
     
-    private final PostgreSQLConnectionManager connectionManager;
-    private final HeliosConfiguration configuration;
+    private final HikariDataSource dataSource;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private PostgreSQLTransaction currentTransaction;
     
-    public PostgreSQLSession(PostgreSQLConnectionManager connectionManager, HeliosConfiguration configuration) {
+    public PostgreSQLSession(HikariDataSource dataSource) {
         super();
-        this.connectionManager = connectionManager;
-        this.configuration = configuration;
+        this.dataSource = dataSource;
         log.debug("PostgreSQL session created");
     }
     
@@ -66,7 +63,7 @@ public class PostgreSQLSession extends AbstractSqlSession {
         
         // No active transaction - create a new connection and manage it automatically
         try {
-            Connection connection = connectionManager.getConnection();
+            Connection connection = dataSource.getConnection();
             connection.setAutoCommit(false);
             try {
                 T result = operation.apply(connection);
@@ -94,7 +91,7 @@ public class PostgreSQLSession extends AbstractSqlSession {
         }
         
         try {
-            Connection connection = connectionManager.getConnection();
+            Connection connection = dataSource.getConnection();
             currentTransaction = new PostgreSQLTransaction(connection);
             log.debug("PostgreSQL transaction started");
             return currentTransaction;
