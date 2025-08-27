@@ -3,19 +3,28 @@ package fr.nassime.helios.mongo.session;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.BulkWriteOptions;
+import com.mongodb.client.model.InsertOneModel;
+import com.mongodb.client.model.ReplaceOneModel;
+import com.mongodb.client.model.WriteModel;
 import fr.nassime.helios.api.HeliosSession;
 import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.transaction.Transaction;
 import fr.nassime.helios.mongo.mapping.DocumentMapper;
 import fr.nassime.helios.mongo.query.MongoQuery;
+import fr.nassime.helios.mongo.transaction.MongoTransaction;
+import fr.nassime.helios.mongo.index.MongoIndexManager;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * MongoDB implementation of HeliosSession.
@@ -27,11 +36,13 @@ public class MongoSession implements HeliosSession {
     private final MongoClient mongoClient;
     private final MongoDatabase database;
     private final DocumentMapper documentMapper;
+    private final MongoIndexManager indexManager;
     
     public MongoSession(MongoClient mongoClient, String databaseName) {
         this.mongoClient = mongoClient;
         this.database = mongoClient.getDatabase(databaseName);
         this.documentMapper = new DocumentMapper();
+        this.indexManager = new MongoIndexManager(database, documentMapper);
         log.debug("MongoDB session created for database: {}", databaseName);
     }
     
@@ -44,6 +55,9 @@ public class MongoSession implements HeliosSession {
         log.debug("Saving entity: {}", entity.getClass().getSimpleName());
         
         try {
+            // Ensure indexes are created for this entity type
+            indexManager.ensureIndexes(entity.getClass());
+            
             String collectionName = documentMapper.getCollectionName(entity.getClass());
             MongoCollection<Document> collection = database.getCollection(collectionName);
             
@@ -79,14 +93,110 @@ public class MongoSession implements HeliosSession {
             return entities;
         }
         
-        log.debug("Saving {} entities", entities.size());
+        log.debug("Bulk saving {} entities using MongoDB bulk operations", entities.size());
         
-        // For now, save one by one. Could be optimized with bulk operations later
+        try {
+            // Group entities by collection (entity class)
+            Map<Class<?>, List<T>> entitiesByClass = entities.stream()
+                .collect(Collectors.groupingBy(Object::getClass));
+            
+            // Process each entity type separately
+            for (Map.Entry<Class<?>, List<T>> entry : entitiesByClass.entrySet()) {
+                Class<?> entityClass = entry.getKey();
+                List<T> classEntities = entry.getValue();
+                
+                if (classEntities.isEmpty()) {
+                    continue;
+                }
+                
+                saveBulkForClass(classEntities, entityClass);
+            }
+            
+            log.debug("Successfully bulk saved {} entities", entities.size());
+            return entities;
+            
+        } catch (Exception e) {
+            log.error("Failed to bulk save entities", e);
+            throw new HeliosException("Failed to bulk save entities: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Perform bulk save operations for entities of a specific class.
+     */
+    @SuppressWarnings("unchecked")
+    private <T> void saveBulkForClass(List<T> entities, Class<?> entityClass) {
+        // Ensure indexes are created for this entity type
+        indexManager.ensureIndexes((Class<T>) entityClass);
+        
+        String collectionName = documentMapper.getCollectionName(entityClass);
+        MongoCollection<Document> collection = database.getCollection(collectionName);
+        
+        List<WriteModel<Document>> bulkOperations = new ArrayList<>();
+        
         for (T entity : entities) {
-            save(entity);
+            Document document = documentMapper.toDocument(entity);
+            Object id = documentMapper.getId(entity);
+            
+            if (id != null && documentMapper.exists(collection, id)) {
+                // Update existing document
+                bulkOperations.add(new ReplaceOneModel<>(
+                    new Document("_id", id),
+                    document
+                ));
+                log.debug("Added replace operation for entity with ID: {}", id);
+            } else {
+                // Insert new document
+                bulkOperations.add(new InsertOneModel<>(document));
+                log.debug("Added insert operation for new entity");
+            }
         }
         
-        return entities;
+        if (!bulkOperations.isEmpty()) {
+            // Execute bulk write with ordered=false for better performance
+            BulkWriteOptions options = new BulkWriteOptions().ordered(false);
+            var result = collection.bulkWrite(bulkOperations, options);
+            
+            log.debug("Bulk write completed for collection {}: {} insertions, {} modifications", 
+                collectionName, result.getInsertedCount(), result.getModifiedCount());
+            
+            // Set generated IDs back to entities for new inserts
+            setGeneratedIds(entities, bulkOperations, result);
+        }
+    }
+    
+    /**
+     * Set generated IDs back to entities after bulk insert.
+     */
+    private <T> void setGeneratedIds(List<T> entities, List<WriteModel<Document>> operations, 
+                                    com.mongodb.bulk.BulkWriteResult result) {
+        
+        // MongoDB bulk operations return inserted IDs in a map
+        // We need to match them back to the original entities
+        Map<Integer, Object> insertedIds = result.getInserts();
+        if (insertedIds.isEmpty()) {
+            return;
+        }
+        
+        int insertIndex = 0;
+        for (int i = 0; i < operations.size() && i < entities.size(); i++) {
+            WriteModel<Document> operation = operations.get(i);
+            
+            if (operation instanceof InsertOneModel) {
+                T entity = entities.get(i);
+                Object existingId = documentMapper.getId(entity);
+                
+                // Only set ID if entity didn't have one originally
+                if (existingId == null) {
+                    Object generatedId = insertedIds.get(insertIndex);
+                    if (generatedId != null) {
+                        documentMapper.setId(entity, generatedId);
+                        log.debug("Set generated ID {} on entity {}", generatedId, entity.getClass().getSimpleName());
+                    }
+                }
+                insertIndex++;
+            }
+        }
     }
     
     @Override
@@ -234,20 +344,53 @@ public class MongoSession implements HeliosSession {
     
     @Override
     public Transaction beginTransaction() {
-        // MongoDB transactions would need to be implemented
-        throw new UnsupportedOperationException("Transactions are not yet implemented for MongoDB");
+        log.debug("Beginning new MongoDB transaction");
+        return new MongoTransaction(mongoClient);
     }
     
     @Override
     public <T> T executeInTransaction(Function<HeliosSession, T> operation) {
-        // For now, just execute without transaction support
-        return operation.apply(this);
+        log.debug("Executing operation in MongoDB transaction");
+        
+        try (MongoTransaction transaction = new MongoTransaction(mongoClient)) {
+            transaction.begin();
+            
+            try {
+                T result = operation.apply(this);
+                transaction.commit();
+                log.debug("Successfully executed operation in transaction");
+                return result;
+            } catch (Exception e) {
+                transaction.rollback();
+                log.error("Error during transaction execution, rolled back", e);
+                throw e;
+            }
+        } catch (Exception e) {
+            log.error("Failed to execute operation in transaction", e);
+            throw new HeliosException("Transaction execution failed: " + e.getMessage(), e);
+        }
     }
     
     @Override
     public void executeInTransaction(Consumer<HeliosSession> operation) {
-        // For now, just execute without transaction support
-        operation.accept(this);
+        log.debug("Executing operation in MongoDB transaction (void)");
+        
+        try (MongoTransaction transaction = new MongoTransaction(mongoClient)) {
+            transaction.begin();
+            
+            try {
+                operation.accept(this);
+                transaction.commit();
+                log.debug("Successfully executed void operation in transaction");
+            } catch (Exception e) {
+                transaction.rollback();
+                log.error("Error during transaction execution, rolled back", e);
+                throw e;
+            }
+        } catch (Exception e) {
+            log.error("Failed to execute void operation in transaction", e);
+            throw new HeliosException("Transaction execution failed: " + e.getMessage(), e);
+        }
     }
     
     @Override
