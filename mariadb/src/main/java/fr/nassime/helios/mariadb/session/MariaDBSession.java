@@ -56,7 +56,14 @@ public class MariaDBSession extends AbstractSqlSession {
             throw new HeliosException("Session is closed");
         }
         
-        try (Connection connection = dataSource.getConnection()) {
+        // If we have an active transaction, use its connection
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            return operation.apply(currentTransaction.getConnection());
+        }
+        
+        // No active transaction - create a new connection and manage it automatically
+        try {
+            Connection connection = dataSource.getConnection();
             connection.setAutoCommit(false);
             try {
                 T result = operation.apply(connection);
@@ -65,6 +72,8 @@ public class MariaDBSession extends AbstractSqlSession {
             } catch (Exception e) {
                 connection.rollback();
                 throw e;
+            } finally {
+                connection.close();
             }
         } catch (SQLException e) {
             throw new HeliosException("Database operation failed", e);

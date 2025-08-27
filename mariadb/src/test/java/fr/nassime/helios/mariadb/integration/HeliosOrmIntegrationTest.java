@@ -201,7 +201,7 @@ class HeliosOrmIntegrationTest extends AbstractMariaDBTest {
     void testBulkOperationsWithQueries() {
         // Create test data
         for (int i = 1; i <= 10; i++) {
-            User user = new User("user" + i, "user" + i + "@example.com");
+            User user = new User(String.format("user%02d", i), "user" + i + "@example.com");
             user.setAge(20 + i);
             user.setActive(i % 2 == 0); // Every other user is inactive
             session.save(user);
@@ -230,7 +230,7 @@ class HeliosOrmIntegrationTest extends AbstractMariaDBTest {
                 .limit(3)
                 .getResultList();
         assertEquals(3, page1.size());
-        assertEquals("user1", page1.get(0).getUsername());
+        assertEquals("user01", page1.get(0).getUsername());
         
         List<User> page2 = session.createQuery(User.class)
                 .orderBy("username")
@@ -238,7 +238,7 @@ class HeliosOrmIntegrationTest extends AbstractMariaDBTest {
                 .offset(3)
                 .getResultList();
         assertEquals(3, page2.size());
-        assertEquals("user4", page2.get(0).getUsername());
+        assertEquals("user04", page2.get(0).getUsername());
         
         // Test count
         long totalCount = session.createQuery(User.class).count();
