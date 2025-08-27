@@ -5,6 +5,7 @@ import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoClient;
 import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.transaction.Transaction;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -15,10 +16,18 @@ import lombok.extern.slf4j.Slf4j;
 public class MongoTransaction implements Transaction, AutoCloseable {
     
     private final MongoClient mongoClient;
+    /**
+     * -- GETTER --
+     *  Get the underlying MongoDB client session for this transaction.
+     *  This can be used by MongoDB operations to ensure they participate in the transaction.
+     */
+    @Getter
     private final ClientSession clientSession;
     private final TransactionOptions transactionOptions;
     private boolean active = false;
+    @Getter
     private boolean rolledBack = false;
+    @Getter
     private boolean committed = false;
     private boolean rollbackOnly = false;
     
@@ -102,17 +111,7 @@ public class MongoTransaction implements Transaction, AutoCloseable {
     public boolean isActive() {
         return active && clientSession.hasActiveTransaction();
     }
-    
-    @Override
-    public boolean isRolledBack() {
-        return rolledBack;
-    }
-    
-    @Override
-    public boolean isCommitted() {
-        return committed;
-    }
-    
+
     @Override
     public boolean isRollbackOnly() {
         return rollbackOnly;
@@ -145,12 +144,5 @@ public class MongoTransaction implements Transaction, AutoCloseable {
             }
         }
     }
-    
-    /**
-     * Get the underlying MongoDB client session for this transaction.
-     * This can be used by MongoDB operations to ensure they participate in the transaction.
-     */
-    public ClientSession getClientSession() {
-        return clientSession;
-    }
+
 }
