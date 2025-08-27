@@ -48,5 +48,7 @@ public class Comment {
         this.content = content;
         this.post = post;
         this.author = author;
+        this.postId = post != null ? post.getId() : null;
+        this.authorId = author != null ? author.getId() : null;
     }
 }

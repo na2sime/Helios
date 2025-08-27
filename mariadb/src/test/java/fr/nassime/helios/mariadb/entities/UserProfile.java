@@ -42,5 +42,6 @@ public class UserProfile {
     public UserProfile(String bio, User user) {
         this.bio = bio;
         this.user = user;
+        this.userId = user != null ? user.getId() : null;
     }
 }
