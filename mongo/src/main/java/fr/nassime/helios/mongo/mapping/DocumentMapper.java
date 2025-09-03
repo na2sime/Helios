@@ -1,7 +1,8 @@
 package fr.nassime.helios.mongo.mapping;
 
 import com.mongodb.client.MongoCollection;
-import fr.nassime.helios.api.annotations.Document;
+import fr.nassime.helios.api.annotations.Persistable;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import fr.nassime.helios.api.annotations.Field;
 import fr.nassime.helios.api.annotations.Id;
 import fr.nassime.helios.api.exception.HeliosException;
@@ -257,9 +258,17 @@ public class DocumentMapper {
         
         // Get collection name
         String collectionName = entityClass.getSimpleName().toLowerCase();
-        Document documentAnnotation = entityClass.getAnnotation(Document.class);
-        if (documentAnnotation != null && !documentAnnotation.collection().isEmpty()) {
-            collectionName = documentAnnotation.collection();
+        Persistable persistableAnnotation = entityClass.getAnnotation(Persistable.class);
+        if (persistableAnnotation != null && !persistableAnnotation.name().isEmpty()) {
+            collectionName = persistableAnnotation.name();
+        }
+        
+        // Validate this is for MongoDB persistence
+        if (persistableAnnotation != null && 
+            persistableAnnotation.type() != PersistenceType.AUTO && 
+            persistableAnnotation.type() != PersistenceType.DOCUMENT &&
+            persistableAnnotation.type() != PersistenceType.HYBRID) {
+            throw new HeliosException("Class " + entityClass.getName() + " is not configured for MongoDB persistence. Found: " + persistableAnnotation.type());
         }
         
         // Get field mappings

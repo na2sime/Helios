@@ -3,7 +3,7 @@ package fr.nassime.helios.mongo.index;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.IndexOptions;
-import fr.nassime.helios.api.annotations.Document;
+import fr.nassime.helios.api.annotations.Persistable;
 import fr.nassime.helios.api.annotations.Index;
 import fr.nassime.helios.api.annotations.Indexes;
 import fr.nassime.helios.api.exception.HeliosException;
@@ -38,7 +38,7 @@ public class MongoIndexManager {
      * This method is idempotent - calling it multiple times is safe.
      */
     public <T> void ensureIndexes(Class<T> entityClass) {
-        if (!entityClass.isAnnotationPresent(Document.class)) {
+        if (!entityClass.isAnnotationPresent(Persistable.class)) {
             log.debug("Class {} is not a document entity, skipping index creation", entityClass.getSimpleName());
             return;
         }
