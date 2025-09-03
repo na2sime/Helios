@@ -1,6 +1,7 @@
 package fr.nassime.helios.sql.mapping;
 
 import fr.nassime.helios.api.annotations.*;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import fr.nassime.helios.api.annotations.enums.GenerationType;
 import fr.nassime.helios.api.exception.HeliosException;
 import lombok.extern.slf4j.Slf4j;
@@ -32,13 +33,20 @@ public class EntityMapper {
     private static EntityMetadata analyzeEntity(Class<?> entityClass) {
         log.debug("Analyzing entity class: {}", entityClass.getName());
         
-        // Check if class is annotated with @Entity
-        Entity entityAnnotation = entityClass.getAnnotation(Entity.class);
-        if (entityAnnotation == null) {
-            throw new HeliosException("Class " + entityClass.getName() + " is not annotated with @Entity");
+        // Check if class is annotated with @Persistable
+        Persistable persistableAnnotation = entityClass.getAnnotation(Persistable.class);
+        if (persistableAnnotation == null) {
+            throw new HeliosException("Class " + entityClass.getName() + " is not annotated with @Persistable");
         }
         
-        String tableName = getTableName(entityClass, entityAnnotation);
+        // Validate this is for SQL persistence
+        if (persistableAnnotation.type() != PersistenceType.AUTO && 
+            persistableAnnotation.type() != PersistenceType.SQL &&
+            persistableAnnotation.type() != PersistenceType.HYBRID) {
+            throw new HeliosException("Class " + entityClass.getName() + " is not configured for SQL persistence. Found: " + persistableAnnotation.type());
+        }
+        
+        String tableName = getTableName(entityClass, persistableAnnotation);
         String schema = getSchema(entityClass);
         
         Field idField = null;
@@ -117,22 +125,18 @@ public class EntityMapper {
     }
     
     /**
-     * Get table name from @Table annotation, @Entity annotation, or class name.
+     * Get table name from @Table annotation, @Persistable annotation, or class name.
      */
-    private static String getTableName(Class<?> entityClass, Entity entityAnnotation) {
-        // First check for @Table annotation
+    private static String getTableName(Class<?> entityClass, Persistable persistableAnnotation) {
+        // First check for @Table annotation (legacy compatibility)
         Table tableAnnotation = entityClass.getAnnotation(Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
             return tableAnnotation.name();
         }
         
-        // Then check @Entity annotation
-        if (!entityAnnotation.table().isEmpty()) {
-            return entityAnnotation.table();
-        }
-        
-        if (!entityAnnotation.name().isEmpty()) {
-            return entityAnnotation.name();
+        // Then check @Persistable annotation
+        if (!persistableAnnotation.name().isEmpty()) {
+            return persistableAnnotation.name();
         }
         
         // Convert CamelCase to snake_case

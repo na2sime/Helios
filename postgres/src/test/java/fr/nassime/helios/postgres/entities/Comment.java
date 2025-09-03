@@ -3,6 +3,7 @@ package fr.nassime.helios.postgres.entities;
 import fr.nassime.helios.api.annotations.*;
 import fr.nassime.helios.api.annotations.enums.FetchType;
 import fr.nassime.helios.api.annotations.enums.GenerationType;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -10,7 +11,7 @@ import java.time.LocalDateTime;
 /**
  * Test entity representing a Comment.
  */
-@Entity
+@Persistable(name = "comments", type = PersistenceType.SQL)
 @Table(name = "comments")
 @Data
 public class Comment {

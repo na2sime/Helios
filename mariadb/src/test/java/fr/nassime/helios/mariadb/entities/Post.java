@@ -2,6 +2,7 @@ package fr.nassime.helios.mariadb.entities;
 
 import fr.nassime.helios.api.annotations.*;
 import fr.nassime.helios.api.annotations.enums.GenerationType;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -10,7 +11,7 @@ import java.util.List;
 /**
  * Test entity representing a Post for MariaDB tests.
  */
-@Entity
+@Persistable(name = "posts", type = PersistenceType.SQL)
 @Table(name = "posts")
 @Data
 public class Post {

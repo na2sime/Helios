@@ -1,6 +1,7 @@
 package fr.nassime.helios.sql.mapping;
 
 import fr.nassime.helios.api.annotations.*;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -88,7 +89,7 @@ class EntityMapperTest {
     }
     
     // Test entities
-    @Entity
+    @Persistable(name = "users", type = PersistenceType.SQL)
     @Table(name = "users", schema = "test_schema")
     static class TestUser {
         @Id
@@ -111,7 +112,7 @@ class EntityMapperTest {
         public void setEmail(String email) { this.email = email; }
     }
     
-    @Entity
+    @Persistable(name = "simple_entities", type = PersistenceType.SQL)
     @Table(name = "simple_entities")
     static class SimpleEntity {
         @Id

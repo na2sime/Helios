@@ -3,12 +3,13 @@ package fr.nassime.helios.postgres.entities;
 import fr.nassime.helios.api.annotations.*;
 import fr.nassime.helios.api.annotations.enums.FetchType;
 import fr.nassime.helios.api.annotations.enums.GenerationType;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import lombok.Data;
 
 /**
  * Test entity representing a UserProfile (OneToOne relationship).
  */
-@Entity
+@Persistable(name = "user_profiles", type = PersistenceType.SQL)
 @Table(name = "user_profiles")
 @Data
 public class UserProfile {

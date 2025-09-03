@@ -1,10 +1,11 @@
 package fr.nassime.helios.sql.query;
 
 import fr.nassime.helios.api.annotations.Column;
-import fr.nassime.helios.api.annotations.Entity;
+import fr.nassime.helios.api.annotations.Persistable;
 import fr.nassime.helios.api.annotations.GeneratedValue;
 import fr.nassime.helios.api.annotations.Id;
 import fr.nassime.helios.api.annotations.Table;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import fr.nassime.helios.sql.mapping.EntityMapper;
 import fr.nassime.helios.sql.mapping.EntityMetadata;
 import org.junit.jupiter.api.Test;
@@ -112,7 +113,7 @@ class SqlBuilderTest {
     }
     
     // Test entities
-    @Entity
+    @Persistable(name = "users", type = PersistenceType.SQL)
     @Table(name = "users", schema = "test_schema")
     static class TestUser {
         @Id
@@ -135,7 +136,7 @@ class SqlBuilderTest {
         public void setEmail(String email) { this.email = email; }
     }
     
-    @Entity
+    @Persistable(name = "simple_entities", type = PersistenceType.SQL)
     @Table(name = "simple_entities")
     static class SimpleEntity {
         @Id
