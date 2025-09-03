@@ -117,12 +117,21 @@ public class MongoIndexManager {
                 fieldName + "_" + (direction == 1 ? "1" : "-1") : indexAnnotation.name();
             options.name(indexName);
             
-            // Create the index
-            collection.createIndex(indexBson, options);
-            log.debug("Created single field index '{}' on field '{}' with direction {}", 
-                indexName, fieldName, direction);
+            // Check if index already exists before creating
+            if (!indexExists(collection, indexName)) {
+                collection.createIndex(indexBson, options);
+                log.debug("Created single field index '{}' on field '{}' with direction {}", 
+                    indexName, fieldName, direction);
+            } else {
+                log.debug("Index '{}' already exists on field '{}', skipping creation", indexName, fieldName);
+            }
                 
         } catch (Exception e) {
+            // Handle index conflicts gracefully
+            if (e.getMessage() != null && e.getMessage().contains("IndexOptionsConflict")) {
+                log.warn("Index conflict on field '{}': {}. Index may already exist with different options.", fieldName, e.getMessage());
+                return; // Skip this index, it already exists
+            }
             log.error("Failed to create index on field: {}", fieldName, e);
             throw new HeliosException("Failed to create index on field " + fieldName + ": " + e.getMessage(), e);
         }
@@ -158,16 +167,49 @@ public class MongoIndexManager {
                 indexFields.add(indexField);
             }
             
-            // Create individual indexes for each field (compound indexes require specific MongoDB driver setup)
-            // This ensures all fields are indexed, though not as a single compound index
-            for (Bson indexField : indexFields) {
-                collection.createIndex(indexField, options);
+            // Check if compound index already exists before creating
+            if (!indexExists(collection, indexName)) {
+                // Create a proper compound index using Document
+                org.bson.Document compoundIndexDoc = new org.bson.Document();
+                for (int i = 0; i < indexAnnotation.fields().length; i++) {
+                    String fieldName = indexAnnotation.fields()[i];
+                    int direction = i < directions.length ? directions[i] : 1;
+                    compoundIndexDoc.append(fieldName, direction);
+                }
+                
+                collection.createIndex(compoundIndexDoc, options);
+                log.debug("Created compound index '{}' on fields: {}", indexName, String.join(", ", indexAnnotation.fields()));
+            } else {
+                log.debug("Compound index '{}' already exists, skipping creation", indexName);
             }
-            log.debug("Created individual indexes for compound index '{}' on fields: {}", indexName, String.join(", ", indexAnnotation.fields()));
             
         } catch (Exception e) {
+            // Handle index conflicts gracefully
+            if (e.getMessage() != null && e.getMessage().contains("IndexOptionsConflict")) {
+                log.warn("Compound index conflict on fields [{}]: {}. Index may already exist with different options.", 
+                    String.join(", ", indexAnnotation.fields()), e.getMessage());
+                return; // Skip this index, it already exists
+            }
             log.error("Failed to create compound index on fields: {}", String.join(", ", indexAnnotation.fields()), e);
             throw new HeliosException("Failed to create compound index: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Check if an index with the given name already exists.
+     */
+    private boolean indexExists(MongoCollection<org.bson.Document> collection, String indexName) {
+        try {
+            for (org.bson.Document indexDoc : collection.listIndexes()) {
+                String existingName = indexDoc.getString("name");
+                if (indexName.equals(existingName)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.warn("Failed to check if index exists: {}", indexName, e);
+            return false;
         }
     }
     

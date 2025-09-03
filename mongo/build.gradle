@@ -2,9 +2,9 @@ dependencies {
     // Core API dependency
     api project(':api')
     
-    // MongoDB specific dependencies
-    implementation 'org.mongodb:mongodb-driver-sync:4.11.1'
-    implementation 'org.mongodb:bson:4.11.1'
+    // MongoDB specific dependencies - Updated to latest stable version
+    implementation 'org.mongodb:mongodb-driver-sync:5.5.1'
+    implementation 'org.mongodb:bson:5.5.1'
     
     // Core dependencies
     implementation 'org.jetbrains:annotations:24.1.0'
