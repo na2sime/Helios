@@ -44,12 +44,17 @@ public class DocumentMapper {
                     
                     // Handle ID field specially
                     if (field.isId()) {
-                        // Convert String to ObjectId if needed
+                        // Convert String to ObjectId if it's a valid ObjectId hex string
                         if (value instanceof String && !((String) value).isEmpty()) {
-                            try {
-                                value = new ObjectId((String) value);
-                            } catch (IllegalArgumentException e) {
-                                // Keep as String if not a valid ObjectId
+                            String stringValue = (String) value;
+                            // Check if it's a valid 24-character hex ObjectId
+                            if (stringValue.length() == 24 && stringValue.matches("[a-fA-F0-9]+")) {
+                                try {
+                                    value = new ObjectId(stringValue);
+                                } catch (IllegalArgumentException e) {
+                                    log.debug("Failed to convert string to ObjectId in toDocument: {}", stringValue);
+                                    // Keep as String if conversion fails
+                                }
                             }
                         }
                         document.put("_id", value);
@@ -141,13 +146,18 @@ public class DocumentMapper {
             javaField.setAccessible(true);
             Object value = javaField.get(entity);
             
-            // Convert String to ObjectId if needed
+            // Convert String to ObjectId if it's a valid ObjectId hex string
             if (value instanceof String && !((String) value).isEmpty()) {
-                try {
-                    return new ObjectId((String) value);
-                } catch (IllegalArgumentException e) {
-                    // Keep as String if not a valid ObjectId
-                    return value;
+                String stringValue = (String) value;
+                // Check if it's a valid 24-character hex ObjectId
+                if (stringValue.length() == 24 && stringValue.matches("[a-fA-F0-9]+")) {
+                    try {
+                        return new ObjectId(stringValue);
+                    } catch (IllegalArgumentException e) {
+                        log.debug("Failed to convert string to ObjectId: {}", stringValue);
+                        // Keep as String if conversion fails
+                        return value;
+                    }
                 }
             }
             
@@ -194,7 +204,22 @@ public class DocumentMapper {
      * Check if document exists by ID.
      */
     public boolean exists(MongoCollection<org.bson.Document> collection, Object id) {
-        return collection.countDocuments(new org.bson.Document("_id", id)) > 0;
+        // Convert the ID to the appropriate format for MongoDB query
+        Object queryId = id;
+        if (id instanceof String && !((String) id).isEmpty()) {
+            String stringId = (String) id;
+            // Check if it's a valid 24-character hex ObjectId
+            if (stringId.length() == 24 && stringId.matches("[a-fA-F0-9]+")) {
+                try {
+                    queryId = new ObjectId(stringId);
+                    log.debug("Converted String ID to ObjectId for exists query: {}", stringId);
+                } catch (IllegalArgumentException e) {
+                    log.debug("Failed to convert string to ObjectId for exists, using as String: {}", stringId);
+                    // Keep as String if conversion fails
+                }
+            }
+        }
+        return collection.countDocuments(new org.bson.Document("_id", queryId)) > 0;
     }
     
     /**

@@ -15,6 +15,7 @@ import fr.nassime.helios.mongo.mapping.DocumentMapper;
 import fr.nassime.helios.mongo.query.MongoQuery;
 import fr.nassime.helios.mongo.transaction.MongoTransaction;
 import fr.nassime.helios.mongo.index.MongoIndexManager;
+import fr.nassime.helios.mongo.relations.MongoRelationLoader;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 
@@ -37,12 +38,14 @@ public class MongoSession implements HeliosSession {
     private final MongoDatabase database;
     private final DocumentMapper documentMapper;
     private final MongoIndexManager indexManager;
+    private final MongoRelationLoader relationLoader;
     
     public MongoSession(MongoClient mongoClient, String databaseName) {
         this.mongoClient = mongoClient;
         this.database = mongoClient.getDatabase(databaseName);
         this.documentMapper = new DocumentMapper();
         this.indexManager = new MongoIndexManager(database, documentMapper);
+        this.relationLoader = new MongoRelationLoader(database, documentMapper);
         log.debug("MongoDB session created for database: {}", databaseName);
     }
     
@@ -93,31 +96,23 @@ public class MongoSession implements HeliosSession {
             return entities;
         }
         
-        log.debug("Bulk saving {} entities using MongoDB bulk operations", entities.size());
+        log.debug("Saving {} entities individually to ensure IDs are set", entities.size());
         
         try {
-            // Group entities by collection (entity class)
-            Map<Class<?>, List<T>> entitiesByClass = entities.stream()
-                .collect(Collectors.groupingBy(Object::getClass));
-            
-            // Process each entity type separately
-            for (Map.Entry<Class<?>, List<T>> entry : entitiesByClass.entrySet()) {
-                Class<?> entityClass = entry.getKey();
-                List<T> classEntities = entry.getValue();
-                
-                if (classEntities.isEmpty()) {
-                    continue;
-                }
-                
-                saveBulkForClass(classEntities, entityClass);
+            // Save each entity individually to ensure IDs are properly set
+            // This approach ensures ID generation works correctly but is less efficient
+            // for large batches. Future optimization: implement proper bulk operations
+            // that handle MongoDB's ID generation and set them back to entities
+            for (T entity : entities) {
+                save(entity);
             }
             
-            log.debug("Successfully bulk saved {} entities", entities.size());
+            log.debug("Successfully saved {} entities", entities.size());
             return entities;
             
         } catch (Exception e) {
-            log.error("Failed to bulk save entities", e);
-            throw new HeliosException("Failed to bulk save entities: " + e.getMessage(), e);
+            log.error("Failed to save entities", e);
+            throw new HeliosException("Failed to save entities: " + e.getMessage(), e);
         }
     }
     
@@ -167,15 +162,19 @@ public class MongoSession implements HeliosSession {
     
     /**
      * Set generated IDs back to entities after bulk insert.
-     * Pour l'instant simplifié - MongoDB génère les IDs automatiquement mais les récupérer
-     * après bulk insert est complexe. On laisse les entités sans ID pour cette version.
+     * 
+     * NOTE: This method is currently unused as we use individual save() operations
+     * in saveAll() to ensure proper ID handling. Future optimization could implement
+     * proper bulk operations with ID extraction from MongoDB's BulkWriteResult.
      */
+    @Deprecated
+    @SuppressWarnings("unused")
     private <T> void setGeneratedIds(List<T> entities, List<WriteModel<Document>> operations, 
                                     com.mongodb.bulk.BulkWriteResult result) {
         
-        // TODO: Implémenter la récupération des IDs générés par MongoDB après bulk insert
-        // Pour l'instant, on laisse les entités sans ID - elles peuvent être retrouvées via query
-        log.debug("Bulk insert completed with {} new documents. IDs not set back to entities in this version.", 
+        // This method would need complex implementation to extract generated IDs
+        // from MongoDB bulk insert results and map them back to the correct entities
+        log.debug("Bulk insert completed with {} new documents. ID extraction not implemented.", 
                   result.getInsertedCount());
     }
     
@@ -191,13 +190,33 @@ public class MongoSession implements HeliosSession {
             String collectionName = documentMapper.getCollectionName(entityClass);
             MongoCollection<Document> collection = database.getCollection(collectionName);
             
-            Document document = collection.find(new Document("_id", id)).first();
+            // Convert the ID to the appropriate format for MongoDB query
+            Object queryId = id;
+            if (id instanceof String && !((String) id).isEmpty()) {
+                String stringId = (String) id;
+                // Check if it's a valid 24-character hex ObjectId
+                if (stringId.length() == 24 && stringId.matches("[a-fA-F0-9]+")) {
+                    try {
+                        queryId = new org.bson.types.ObjectId(stringId);
+                        log.debug("Converted String ID to ObjectId for query: {}", stringId);
+                    } catch (IllegalArgumentException e) {
+                        log.debug("Failed to convert string to ObjectId, using as String: {}", stringId);
+                        // Keep as String if conversion fails
+                    }
+                }
+            }
+            
+            Document document = collection.find(new Document("_id", queryId)).first();
             if (document == null) {
-                log.debug("No document found with ID: {}", id);
+                log.debug("No document found with ID: {}", queryId);
                 return Optional.empty();
             }
             
             T entity = documentMapper.fromDocument(document, entityClass);
+            
+            // Load EAGER relations
+            relationLoader.loadEagerRelations(entity);
+            
             log.debug("Found entity with ID: {}", id);
             return Optional.of(entity);
             
@@ -219,9 +238,14 @@ public class MongoSession implements HeliosSession {
             String collectionName = documentMapper.getCollectionName(entityClass);
             MongoCollection<Document> collection = database.getCollection(collectionName);
             
-            List<T> entities = collection.find()
-                .map(document -> documentMapper.fromDocument(document, entityClass))
-                .into(new java.util.ArrayList<>());
+            List<T> entities = new java.util.ArrayList<>();
+            
+            // Process each document and load eager relations
+            collection.find().forEach(document -> {
+                T entity = documentMapper.fromDocument(document, entityClass);
+                relationLoader.loadEagerRelations(entity);
+                entities.add(entity);
+            });
             
             log.debug("Found {} entities for class: {}", entities.size(), entityClass.getSimpleName());
             return entities;
@@ -257,10 +281,26 @@ public class MongoSession implements HeliosSession {
             String collectionName = documentMapper.getCollectionName(entityClass);
             MongoCollection<Document> collection = database.getCollection(collectionName);
             
-            long deletedCount = collection.deleteOne(new Document("_id", id)).getDeletedCount();
+            // Convert the ID to the appropriate format for MongoDB query
+            Object queryId = id;
+            if (id instanceof String && !((String) id).isEmpty()) {
+                String stringId = (String) id;
+                // Check if it's a valid 24-character hex ObjectId
+                if (stringId.length() == 24 && stringId.matches("[a-fA-F0-9]+")) {
+                    try {
+                        queryId = new org.bson.types.ObjectId(stringId);
+                        log.debug("Converted String ID to ObjectId for delete query: {}", stringId);
+                    } catch (IllegalArgumentException e) {
+                        log.debug("Failed to convert string to ObjectId for delete, using as String: {}", stringId);
+                        // Keep as String if conversion fails
+                    }
+                }
+            }
+            
+            long deletedCount = collection.deleteOne(new Document("_id", queryId)).getDeletedCount();
             
             if (deletedCount == 0) {
-                log.warn("No document found to delete with ID: {}", id);
+                log.warn("No document found to delete with ID: {}", queryId);
                 return false;
             } else {
                 log.debug("Deleted entity with ID: {}", id);
@@ -317,9 +357,19 @@ public class MongoSession implements HeliosSession {
     
     @Override
     public <T> void loadRelation(T entity, String relationName) {
-        // MongoDB relations would need to be implemented differently
-        // For now, throw unsupported operation
-        throw new UnsupportedOperationException("Relation loading is not yet implemented for MongoDB");
+        if (entity == null || relationName == null) {
+            throw new IllegalArgumentException("Entity and relation name cannot be null");
+        }
+        
+        log.debug("Loading relation '{}' for entity: {}", relationName, entity.getClass().getSimpleName());
+        
+        try {
+            relationLoader.loadRelation(entity, relationName);
+            log.debug("Successfully loaded relation '{}' for entity: {}", relationName, entity.getClass().getSimpleName());
+        } catch (Exception e) {
+            log.error("Failed to load relation '{}' for entity: {}", relationName, entity.getClass().getSimpleName(), e);
+            throw new HeliosException("Failed to load relation: " + e.getMessage(), e);
+        }
     }
     
     @Override

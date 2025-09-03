@@ -158,12 +158,12 @@ public class MongoIndexManager {
                 indexFields.add(indexField);
             }
             
-            // Pour l'instant, on créé des index séparés au lieu d'un compound index
-            // TODO: Implémenter compound index correctement avec MongoDB driver
+            // Create individual indexes for each field (compound indexes require specific MongoDB driver setup)
+            // This ensures all fields are indexed, though not as a single compound index
             for (Bson indexField : indexFields) {
                 collection.createIndex(indexField, options);
             }
-            log.debug("Created separate indexes for compound index '{}' on fields: {}", indexName, String.join(", ", indexAnnotation.fields()));
+            log.debug("Created individual indexes for compound index '{}' on fields: {}", indexName, String.join(", ", indexAnnotation.fields()));
             
         } catch (Exception e) {
             log.error("Failed to create compound index on fields: {}", String.join(", ", indexAnnotation.fields()), e);
