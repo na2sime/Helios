@@ -4,15 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Helios is a lightweight Object-Relational Mapper (ORM) for PostgreSQL with support for MongoDB, designed around annotation-based entity mapping and relationship management. The project uses HikariCP for connection pooling and supports lazy/eager loading of relations.
+Helios is a revolutionary multi-database ORM supporting PostgreSQL, MongoDB, MariaDB, and **Hybrid Entities**. It features annotation-based entity mapping, relationship management, and the groundbreaking ability to distribute entity data across both relational and document databases for optimal performance and flexibility.
 
 ## Architecture
 
 ### Multi-Module Structure
-- **Root module** (`/src/main/java/fr/nassime/helios/`): Core ORM implementation with PostgreSQL support
-- **api module** (`/api/`): API layer components (placeholder for future development)  
+- **api module** (`/api/`): Core API interfaces, annotations, and contracts
+- **sql module** (`/sql/`): Common SQL functionality and abstractions
 - **postgres module** (`/postgres/`): PostgreSQL-specific implementations
+- **mariadb module** (`/mariadb/`): MariaDB-specific implementations
 - **mongo module** (`/mongo/`): MongoDB-specific implementations
+- **hybrid module** (`/hybrid/`): **Revolutionary Hybrid Entity support**
 
 ### Core Components
 - `HeliosORM`: Main entry point providing CRUD operations and transaction management
@@ -23,12 +25,23 @@ Helios is a lightweight Object-Relational Mapper (ORM) for PostgreSQL with suppo
 - Query builders: `SelectBuilder`, `InsertBuilder`, `UpdateBuilder`, `DeleteBuilder`
 
 ### Annotation System
-Uses custom annotations for entity mapping:
-- `@Table`: Maps classes to database tables
-- `@Column`: Maps fields to database columns  
+Uses unified annotation system for multi-database support:
+
+#### Core Annotations
+- `@Persistable`: Universal entity annotation for all storage types
 - `@Id`: Marks primary key fields
-- `@OneToMany`, `@ManyToOne`, `@ManyToMany`: Define entity relationships
-- `@Relation`: Base relation annotation
+- `@Column`: Maps fields to relational database columns
+- `@Field`: Maps fields to document database fields
+
+#### Relationship Annotations
+- `@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@OneToOne`: Define entity relationships
+- `@JoinColumn`, `@JoinTable`: Configure relationship mappings
+
+#### Hybrid Entity Annotations (NEW! 🚀)
+- `@HybridEntity`: Marks entities that span multiple storage types
+- `@HybridField`: Controls field-level storage distribution
+- `StorageType`: RELATIONAL, DOCUMENT, or BOTH
+- `SynchronizationStrategy`: LINKED, EMBEDDED, UNIFIED, or MANUAL
 
 ## Development Commands
 
@@ -41,6 +54,7 @@ Uses custom annotations for entity mapping:
 ./gradlew :api:build
 ./gradlew :postgres:build  
 ./gradlew :mongo:build
+./gradlew :hybrid:build
 
 # Create JAR with dependencies
 ./gradlew shadowJar
@@ -84,6 +98,55 @@ All database operations are wrapped in transactions via `TransactionManager.exec
 
 ### Connection Pooling
 Uses HikariCP for high-performance connection pooling. Configuration handled through `DataSourceConfig` builder pattern.
+
+### Hybrid Entities (Revolutionary Feature! 🚀)
+Helios introduces **Hybrid Entities** - the first ORM to natively support distributing entity data across multiple storage types within a single entity definition.
+
+#### Key Benefits
+- **Optimal Storage**: Store structured data in SQL, flexible data in NoSQL
+- **Performance**: Fast relational queries + flexible document aggregations  
+- **Scalability**: Scale different data types independently
+- **Evolution**: Add flexible fields without schema migrations
+
+#### Usage Example
+```java
+@Persistable(name = "users", type = PersistenceType.HYBRID)
+@HybridEntity(
+    relationalTable = "users",
+    documentCollection = "user_profiles", 
+    strategy = SynchronizationStrategy.LINKED
+)
+public class User {
+    @Id
+    private Long id;
+    
+    // Stored in PostgreSQL for fast queries
+    @HybridField(storage = StorageType.RELATIONAL)
+    private String email;
+    
+    @HybridField(storage = StorageType.RELATIONAL) 
+    private String firstName;
+    
+    // Stored in MongoDB for flexibility
+    @HybridField(storage = StorageType.DOCUMENT)
+    private List<Message> messages;
+    
+    @HybridField(storage = StorageType.DOCUMENT)
+    private Map<String, Object> preferences;
+}
+```
+
+#### Synchronization Strategies
+- **LINKED**: Document references relational ID (recommended)
+- **EMBEDDED**: Both stores share embedded identifiers
+- **UNIFIED**: Full synchronization across both stores  
+- **MANUAL**: Developer-controlled synchronization
+
+#### Use Cases
+- **E-commerce**: Product catalog (SQL) + Reviews/Analytics (NoSQL)
+- **Social Media**: User profile (SQL) + Activity feed (NoSQL)
+- **IoT**: Device config (SQL) + Telemetry data (NoSQL)
+- **CRM**: Customer data (SQL) + Interaction logs (NoSQL)
 
 ## Database Schema Requirements
 
