@@ -2,6 +2,7 @@ package fr.nassime.helios.sql.transaction;
 
 import fr.nassime.helios.api.exception.TransactionException;
 import fr.nassime.helios.api.transaction.Transaction;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
@@ -13,7 +14,12 @@ import java.sql.SQLException;
  */
 @Slf4j
 public abstract class AbstractSqlTransaction implements Transaction {
-    
+
+    /**
+     * -- GETTER --
+     *  Get the underlying database connection.
+     */
+    @Getter
     private final Connection connection;
     private boolean active;
     private boolean rolledBack;
@@ -83,14 +89,7 @@ public abstract class AbstractSqlTransaction implements Transaction {
     public void setRollbackOnly() {
         // Default implementation - can be overridden by subclasses
     }
-    
-    /**
-     * Get the underlying database connection.
-     */
-    public Connection getConnection() {
-        return connection;
-    }
-    
+
     /**
      * Check if the transaction is in a valid state for operations.
      */

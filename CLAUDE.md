@@ -41,9 +41,9 @@ Uses unified annotation system for multi-database support:
 - `@JoinColumn`: Configures foreign key columns
 - `@JoinTable`: Configures join tables for many-to-many relationships
 
-#### Legacy Annotations (Deprecated)
-- `@Table`: Use `@Persistable(type = PersistenceType.SQL)` instead
-- `@Document`: Use `@Persistable(type = PersistenceType.DOCUMENT)` instead
+#### Multi-Database Configuration
+- `database` parameter: Route entities to specific databases in multi-database setups
+  - Example: `@Persistable(name = "users", database = "main-pg")`
 
 ## Development Commands
 
@@ -110,11 +110,42 @@ Entities are mapped using annotations and reflection via `EntityMapper`. The map
 ### Connection Pooling
 Uses HikariCP for high-performance connection pooling in SQL databases. Configuration handled through provider-specific configuration classes.
 
-## Usage Examples
+## Multi-Database Configuration (v2.0+)
 
-### PostgreSQL Entity
+Helios v2.0 introduces simplified multi-database configuration, allowing you to connect to PostgreSQL, MariaDB, and MongoDB simultaneously with automatic entity routing.
+
+### Configuration with HeliosBuilder
 ```java
-@Persistable(name = "users", type = PersistenceType.SQL)
+// Configure multiple databases
+Helios helios = Helios.configure()
+    .postgres("main", "localhost:5432/mydb", "user", "password")
+    .mongo("analytics", "mongodb://localhost:27017/analytics")
+    .mariadb("legacy", "localhost:3306/olddb", "user", "password")
+    .defaultDatabase("main")
+    .build();
+
+// Open unified session
+try (HeliosSession session = helios.openSession()) {
+    // Operations automatically routed to correct database
+    session.save(user);      // → PostgreSQL (main)
+    session.save(event);     // → MongoDB (analytics)
+    session.save(product);   // → MariaDB (legacy)
+}
+
+// Or open database-specific session
+try (HeliosSession pgSession = helios.openSession("main")) {
+    // All operations use PostgreSQL only
+    pgSession.executeInTransaction(s -> {
+        s.save(user);
+        s.save(order);
+    });
+}
+```
+
+### Entity Routing with @Persistable
+```java
+// User stored in PostgreSQL
+@Persistable(name = "users", type = PersistenceType.SQL, database = "main")
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -129,30 +160,42 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Order> orders;
 }
-```
 
-### MongoDB Document
-```java
-@Persistable(name = "products", type = PersistenceType.DOCUMENT)
-public class Product {
+// Events stored in MongoDB
+@Persistable(name = "events", type = PersistenceType.DOCUMENT, database = "analytics")
+public class AnalyticsEvent {
     @Id
     private String id;
 
-    @Field
+    @Field(name = "event_type")
+    private String eventType;
+
+    @Field(name = "user_id")
+    private Long userId;
+
+    @Field(name = "metadata")
+    private Map<String, Object> metadata;
+}
+
+// Products stored in MariaDB
+@Persistable(name = "products", type = PersistenceType.SQL, database = "legacy")
+public class Product {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "name")
     private String name;
 
-    @Field
+    @Column(name = "price")
     private Double price;
-
-    @Field
-    private Map<String, Object> metadata;
 }
 ```
 
-### Session Usage
+### Single Database Configuration (Legacy Support)
 ```java
-// Create session
-HeliosSessionFactory factory = new PostgreSQLSessionFactory(config);
+// Still supported for simple use cases
+HeliosSessionFactory factory = Helios.createSessionFactory(config);
 HeliosSession session = factory.openSession();
 
 // CRUD operations
@@ -162,13 +205,6 @@ session.save(user);
 
 Optional<User> found = session.findById(User.class, 1L);
 List<User> all = session.findAll(User.class);
-
-// Transactions
-session.executeInTransaction(s -> {
-    User u = s.findById(User.class, 1L).orElseThrow();
-    u.setEmail("updated@example.com");
-    s.save(u);
-});
 
 session.close();
 ```
@@ -221,10 +257,51 @@ Test dependencies:
 3. **Entity design**: Keep entities simple, use proper annotations
 4. **Connection pooling**: Configure HikariCP settings for production use
 5. **Error handling**: Catch and handle `HeliosException` appropriately
+6. **Multi-database naming**: Use descriptive database names (e.g., "user-data", "analytics")
+7. **Database routing**: Group related entities in the same database
+8. **Transaction scope**: Transactions don't span multiple databases - use database-specific sessions
+
+## Multi-Database Limitations
+
+### Cross-Database Transactions
+Transactions cannot span multiple databases. Operations on entities in different databases are not atomic:
+
+```java
+// ❌ Won't work atomically - entities in different databases
+session.executeInTransaction(s -> {
+    s.save(user);      // PostgreSQL
+    s.save(event);     // MongoDB - different database!
+});
+
+// ✅ Use database-specific sessions for transactions
+helios.openSession("main").executeInTransaction(s -> {
+    s.save(user);
+    s.save(order);  // Both in same database
+});
+```
+
+### Cross-Database Relations
+Relations between entities in different databases are not supported:
+
+```java
+// ❌ User in PostgreSQL, Orders in MongoDB
+@Persistable(database = "main")
+class User {
+    @OneToMany
+    List<Order> orders;  // Won't work if Order is in different database
+}
+
+// ✅ Keep related entities in the same database
+@Persistable(database = "main")
+class User {
+    @OneToMany
+    List<Order> orders;  // Both User and Order in "main"
+}
+```
 
 ## Roadmap
 
-### v2.1 (Future)
+### v2.1 (Planned)
 - Hybrid entities (data spanning SQL + NoSQL)
 - Cross-storage relations
 - Advanced caching layer
