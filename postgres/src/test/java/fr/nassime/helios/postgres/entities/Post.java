@@ -13,7 +13,6 @@ import java.util.List;
  * Test entity representing a Post.
  */
 @Persistable(name = "posts", type = PersistenceType.SQL)
-@Table(name = "posts")
 @Data
 public class Post {
     

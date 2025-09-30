@@ -40,9 +40,8 @@ public class EntityMapper {
         }
         
         // Validate this is for SQL persistence
-        if (persistableAnnotation.type() != PersistenceType.AUTO && 
-            persistableAnnotation.type() != PersistenceType.SQL &&
-            persistableAnnotation.type() != PersistenceType.HYBRID) {
+        if (persistableAnnotation.type() != PersistenceType.AUTO &&
+            persistableAnnotation.type() != PersistenceType.SQL) {
             throw new HeliosException("Class " + entityClass.getName() + " is not configured for SQL persistence. Found: " + persistableAnnotation.type());
         }
         
@@ -125,33 +124,24 @@ public class EntityMapper {
     }
     
     /**
-     * Get table name from @Table annotation, @Persistable annotation, or class name.
+     * Get table name from @Persistable annotation or class name.
      */
     private static String getTableName(Class<?> entityClass, Persistable persistableAnnotation) {
-        // First check for @Table annotation (legacy compatibility)
-        Table tableAnnotation = entityClass.getAnnotation(Table.class);
-        if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
-            return tableAnnotation.name();
-        }
-        
-        // Then check @Persistable annotation
+        // Check @Persistable annotation
         if (!persistableAnnotation.name().isEmpty()) {
             return persistableAnnotation.name();
         }
-        
+
         // Convert CamelCase to snake_case
         String className = entityClass.getSimpleName();
         return camelToSnakeCase(className);
     }
-    
+
     /**
-     * Get schema name from @Table annotation.
+     * Get schema name (currently not supported, returns null).
      */
     private static String getSchema(Class<?> entityClass) {
-        Table tableAnnotation = entityClass.getAnnotation(Table.class);
-        if (tableAnnotation != null && !tableAnnotation.schema().isEmpty()) {
-            return tableAnnotation.schema();
-        }
+        // Schema support can be added via @Persistable if needed
         return null;
     }
     

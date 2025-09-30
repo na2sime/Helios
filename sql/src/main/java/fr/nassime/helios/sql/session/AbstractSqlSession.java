@@ -9,6 +9,7 @@ import fr.nassime.helios.sql.mapping.EntityMetadata;
 import fr.nassime.helios.sql.mapping.ResultSetMapper;
 import fr.nassime.helios.sql.query.SqlBuilder;
 import fr.nassime.helios.sql.relation.RelationLoader;
+import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
@@ -17,6 +18,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
@@ -25,11 +27,15 @@ import java.util.function.Function;
  */
 @Slf4j
 public abstract class AbstractSqlSession implements HeliosSession {
-    
+
     private final ResultSetMapper resultSetMapper;
     private final RelationLoader relationLoader;
-    
-    protected AbstractSqlSession() {
+    protected final HikariDataSource dataSource;
+    protected final AtomicBoolean closed = new AtomicBoolean(false);
+    protected Transaction currentTransaction;
+
+    protected AbstractSqlSession(HikariDataSource dataSource) {
+        this.dataSource = dataSource;
         this.resultSetMapper = new ResultSetMapper();
         this.relationLoader = new RelationLoader(this::executeWithConnection);
     }
@@ -242,26 +248,85 @@ public abstract class AbstractSqlSession implements HeliosSession {
     
     @Override
     public void flush() {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("flush not implemented yet");
+        if (isClosed()) {
+            throw new HeliosException("Session is closed");
+        }
+
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            try {
+                currentTransaction.commit();
+                currentTransaction = null;
+                log.debug("Session flushed - transaction committed");
+            } catch (Exception e) {
+                log.error("Failed to flush session", e);
+                throw new HeliosException("Failed to flush session", e);
+            }
+        } else {
+            log.debug("No active transaction to flush");
+        }
     }
-    
+
     @Override
     public void clear() {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("clear not implemented yet");
+        if (isClosed()) {
+            throw new HeliosException("Session is closed");
+        }
+
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            try {
+                currentTransaction.rollback();
+                currentTransaction = null;
+                log.debug("Session cleared - transaction rolled back");
+            } catch (Exception e) {
+                log.error("Failed to clear session", e);
+                throw new HeliosException("Failed to clear session", e);
+            }
+        } else {
+            log.debug("No active transaction to clear");
+        }
     }
-    
+
     @Override
     public Transaction beginTransaction() {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("beginTransaction not implemented yet");
+        if (isClosed()) {
+            throw new HeliosException("Session is closed");
+        }
+
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            throw new HeliosException("Transaction already active");
+        }
+
+        try {
+            Connection connection = dataSource.getConnection();
+            currentTransaction = createTransaction(connection);
+            log.debug("Transaction started");
+            return currentTransaction;
+        } catch (SQLException e) {
+            throw new HeliosException("Failed to begin transaction", e);
+        }
     }
-    
+
     @Override
     public void close() {
-        // This method should be implemented by subclasses
-        throw new UnsupportedOperationException("close not implemented yet");
+        if (closed.compareAndSet(false, true)) {
+            try {
+                if (currentTransaction != null && currentTransaction.isActive()) {
+                    currentTransaction.rollback();
+                    log.debug("Active transaction rolled back on session close");
+                }
+                doClose();
+            } catch (Exception e) {
+                log.error("Error closing session", e);
+                throw new HeliosException("Failed to close session", e);
+            }
+        }
+    }
+
+    /**
+     * Check if the session is closed.
+     */
+    protected boolean isClosed() {
+        return closed.get();
     }
     
     /**
@@ -363,10 +428,57 @@ public abstract class AbstractSqlSession implements HeliosSession {
      * Create a database-specific query implementation.
      */
     protected abstract Query createSqlQuery(String queryString);
-    
+
+    /**
+     * Create a database-specific transaction implementation.
+     */
+    protected abstract Transaction createTransaction(Connection connection);
+
+    /**
+     * Hook for subclass-specific close logic.
+     */
+    protected void doClose() {
+        // Default: no additional cleanup needed
+    }
+
     /**
      * Execute a function with a database connection.
-     * This method should be implemented by subclasses to provide connection management.
+     * Handles transaction and connection lifecycle automatically.
      */
-    public abstract <T> T executeWithConnection(Function<Connection, T> operation);
+    public <T> T executeWithConnection(Function<Connection, T> operation) {
+        if (isClosed()) {
+            throw new HeliosException("Session is closed");
+        }
+
+        // If we have an active transaction, use its connection
+        if (currentTransaction != null && currentTransaction.isActive()) {
+            return operation.apply(getTransactionConnection());
+        }
+
+        // No active transaction - create a new connection and manage it automatically
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                T result = operation.apply(connection);
+                connection.commit();
+                return result;
+            } catch (Exception e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new HeliosException("Database operation failed", e);
+        }
+    }
+
+    /**
+     * Get the connection from the current transaction.
+     * Must be overridden if transaction implementation differs.
+     */
+    protected Connection getTransactionConnection() {
+        if (currentTransaction instanceof fr.nassime.helios.sql.transaction.AbstractSqlTransaction) {
+            return ((fr.nassime.helios.sql.transaction.AbstractSqlTransaction) currentTransaction).getConnection();
+        }
+        throw new HeliosException("Unable to get connection from transaction");
+    }
 }

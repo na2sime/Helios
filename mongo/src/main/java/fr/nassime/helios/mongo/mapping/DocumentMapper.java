@@ -264,10 +264,9 @@ public class DocumentMapper {
         }
         
         // Validate this is for MongoDB persistence
-        if (persistableAnnotation != null && 
-            persistableAnnotation.type() != PersistenceType.AUTO && 
-            persistableAnnotation.type() != PersistenceType.DOCUMENT &&
-            persistableAnnotation.type() != PersistenceType.HYBRID) {
+        if (persistableAnnotation != null &&
+            persistableAnnotation.type() != PersistenceType.AUTO &&
+            persistableAnnotation.type() != PersistenceType.DOCUMENT) {
             throw new HeliosException("Class " + entityClass.getName() + " is not configured for MongoDB persistence. Found: " + persistableAnnotation.type());
         }
         

@@ -12,7 +12,6 @@ import java.util.List;
  * Test entity representing a Post for MariaDB tests.
  */
 @Persistable(name = "posts", type = PersistenceType.SQL)
-@Table(name = "posts")
 @Data
 public class Post {
     

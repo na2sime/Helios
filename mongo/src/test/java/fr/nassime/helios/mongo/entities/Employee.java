@@ -1,11 +1,12 @@
 package fr.nassime.helios.mongo.entities;
 
-import fr.nassime.helios.api.annotations.Document;
 import fr.nassime.helios.api.annotations.Field;
 import fr.nassime.helios.api.annotations.Id;
 import fr.nassime.helios.api.annotations.ManyToOne;
 import fr.nassime.helios.api.annotations.ManyToMany;
+import fr.nassime.helios.api.annotations.Persistable;
 import fr.nassime.helios.api.annotations.enums.FetchType;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import fr.nassime.helios.mongo.annotations.Reference;
 
 import java.util.List;
@@ -14,7 +15,7 @@ import java.util.List;
  * Test entity representing an Employee with ManyToOne relationship to Department
  * and ManyToMany relationship to Project.
  */
-@Document(collection = "employees")
+@Persistable(name = "employees", type = PersistenceType.DOCUMENT)
 public class Employee {
     
     @Id

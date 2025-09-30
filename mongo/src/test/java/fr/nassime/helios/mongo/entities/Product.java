@@ -1,15 +1,16 @@
 package fr.nassime.helios.mongo.entities;
 
-import fr.nassime.helios.api.annotations.Document;
 import fr.nassime.helios.api.annotations.Field;
 import fr.nassime.helios.api.annotations.Id;
+import fr.nassime.helios.api.annotations.Persistable;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 
 import java.math.BigDecimal;
 
 /**
  * Test entity for MongoDB Product document.
  */
-@Document(collection = "products")
+@Persistable(name = "products", type = PersistenceType.DOCUMENT)
 public class Product {
     
     @Id

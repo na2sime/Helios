@@ -12,7 +12,6 @@ import java.util.List;
  * Test entity representing a User.
  */
 @Persistable(name = "users", type = PersistenceType.SQL)
-@Table(name = "users")
 @Data
 public class User {
     

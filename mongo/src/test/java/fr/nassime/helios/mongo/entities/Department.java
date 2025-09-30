@@ -1,17 +1,18 @@
 package fr.nassime.helios.mongo.entities;
 
-import fr.nassime.helios.api.annotations.Document;
 import fr.nassime.helios.api.annotations.Field;
 import fr.nassime.helios.api.annotations.Id;
 import fr.nassime.helios.api.annotations.OneToMany;
+import fr.nassime.helios.api.annotations.Persistable;
 import fr.nassime.helios.api.annotations.enums.FetchType;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 
 import java.util.List;
 
 /**
  * Test entity representing a Department with OneToMany relationship to Employee.
  */
-@Document(collection = "departments")
+@Persistable(name = "departments", type = PersistenceType.DOCUMENT)
 public class Department {
     
     @Id

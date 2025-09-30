@@ -4,7 +4,6 @@ import fr.nassime.helios.api.annotations.Column;
 import fr.nassime.helios.api.annotations.Persistable;
 import fr.nassime.helios.api.annotations.GeneratedValue;
 import fr.nassime.helios.api.annotations.Id;
-import fr.nassime.helios.api.annotations.Table;
 import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import fr.nassime.helios.sql.mapping.EntityMapper;
 import fr.nassime.helios.sql.mapping.EntityMetadata;
@@ -21,20 +20,20 @@ class SqlBuilderTest {
     void shouldBuildSelectByIdQuery() {
         EntityMetadata metadata = EntityMapper.getMetadata(TestUser.class);
         SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectById(metadata);
-        
+
         assertNotNull(query);
-        String expectedSql = "SELECT user_name, id, email FROM test_schema.users WHERE id = ?";
+        String expectedSql = "SELECT user_name, id, email FROM users WHERE id = ?";
         assertEquals(expectedSql, query.getSql());
         assertTrue(query.getParameters().isEmpty());
     }
-    
+
     @Test
     void shouldBuildSelectAllQuery() {
         EntityMetadata metadata = EntityMapper.getMetadata(TestUser.class);
         SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectAll(metadata);
-        
+
         assertNotNull(query);
-        String expectedSql = "SELECT user_name, id, email FROM test_schema.users";
+        String expectedSql = "SELECT user_name, id, email FROM users";
         assertEquals(expectedSql, query.getSql());
         assertTrue(query.getParameters().isEmpty());
     }
@@ -45,17 +44,17 @@ class SqlBuilderTest {
         TestUser user = new TestUser();
         user.setName("John Doe");
         user.setEmail("john@example.com");
-        
+
         SqlBuilder.PreparedQuery query = SqlBuilder.buildInsert(metadata, user);
-        
+
         assertNotNull(query);
-        String expectedSql = "INSERT INTO test_schema.users (user_name, email) VALUES (?, ?)";
+        String expectedSql = "INSERT INTO users (user_name, email) VALUES (?, ?)";
         assertEquals(expectedSql, query.getSql());
         assertEquals(2, query.getParameters().size());
         assertEquals("John Doe", query.getParameters().get(0));
         assertEquals("john@example.com", query.getParameters().get(1));
     }
-    
+
     @Test
     void shouldBuildUpdateQuery() {
         EntityMetadata metadata = EntityMapper.getMetadata(TestUser.class);
@@ -63,40 +62,40 @@ class SqlBuilderTest {
         user.setId(1L);
         user.setName("John Doe Updated");
         user.setEmail("john.updated@example.com");
-        
+
         SqlBuilder.PreparedQuery query = SqlBuilder.buildUpdate(metadata, user);
-        
+
         assertNotNull(query);
-        String expectedSql = "UPDATE test_schema.users SET user_name = ?, email = ? WHERE id = ?";
+        String expectedSql = "UPDATE users SET user_name = ?, email = ? WHERE id = ?";
         assertEquals(expectedSql, query.getSql());
         assertEquals(3, query.getParameters().size());
         assertEquals("John Doe Updated", query.getParameters().get(0));
         assertEquals("john.updated@example.com", query.getParameters().get(1));
         assertEquals(1L, query.getParameters().get(2));
     }
-    
+
     @Test
     void shouldBuildDeleteQuery() {
         EntityMetadata metadata = EntityMapper.getMetadata(TestUser.class);
         TestUser user = new TestUser();
         user.setId(1L);
-        
+
         SqlBuilder.PreparedQuery query = SqlBuilder.buildDelete(metadata, user);
-        
+
         assertNotNull(query);
-        String expectedSql = "DELETE FROM test_schema.users WHERE id = ?";
+        String expectedSql = "DELETE FROM users WHERE id = ?";
         assertEquals(expectedSql, query.getSql());
         assertEquals(1, query.getParameters().size());
         assertEquals(1L, query.getParameters().get(0));
     }
-    
+
     @Test
     void shouldBuildSelectByForeignKeyQuery() {
         EntityMetadata metadata = EntityMapper.getMetadata(TestUser.class);
         SqlBuilder.PreparedQuery query = SqlBuilder.buildSelectByForeignKey(metadata, "department_id", 123L);
-        
+
         assertNotNull(query);
-        String expectedSql = "SELECT user_name, id, email FROM test_schema.users WHERE department_id = ?";
+        String expectedSql = "SELECT user_name, id, email FROM users WHERE department_id = ?";
         assertEquals(expectedSql, query.getSql());
         assertEquals(1, query.getParameters().size());
         assertEquals(123L, query.getParameters().get(0));
@@ -114,7 +113,6 @@ class SqlBuilderTest {
     
     // Test entities
     @Persistable(name = "users", type = PersistenceType.SQL)
-    @Table(name = "users", schema = "test_schema")
     static class TestUser {
         @Id
         @GeneratedValue
@@ -137,7 +135,6 @@ class SqlBuilderTest {
     }
     
     @Persistable(name = "simple_entities", type = PersistenceType.SQL)
-    @Table(name = "simple_entities")
     static class SimpleEntity {
         @Id
         @GeneratedValue

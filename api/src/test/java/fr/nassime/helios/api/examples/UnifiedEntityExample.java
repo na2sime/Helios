@@ -180,53 +180,53 @@ public class UnifiedEntityExample {
     }
     
     /**
-     * Profile entity with HYBRID persistence.
-     * Stored in both SQL (for consistency) and MongoDB (for performance).
+     * Product entity demonstrating flexible field mapping.
+     * Can work with both SQL and document databases.
      */
-    @Persistable(name = "profiles", type = PersistenceType.HYBRID, 
-                 properties = {"sql.schema=user_data", "mongo.database=profiles"})
-    public static class UserProfile {
-        
+    @Persistable(name = "products", type = PersistenceType.AUTO)
+    public static class Product {
+
         @Id
+        @GeneratedValue(strategy = GenerationType.AUTO)
         private String id;
-        
-        @Column(name = "user_id")
-        @Field(name = "user_id")
-        private String userId;
-        
-        @Column(name = "bio")
-        @Field(name = "bio")
-        private String bio;
-        
-        @Column(name = "avatar_url")
-        @Field(name = "avatar_url")
-        private String avatarUrl;
-        
-        @Column(name = "preferences")
-        @Field(name = "preferences")
-        private Object preferences; // JSON in SQL, Document in MongoDB
-        
+
+        @Column(name = "name")
+        @Field(name = "name")
+        private String name;
+
+        @Column(name = "description")
+        @Field(name = "description")
+        private String description;
+
+        @Column(name = "price")
+        @Field(name = "price")
+        private Double price;
+
+        @Column(name = "stock")
+        @Field(name = "stock")
+        private Integer stock;
+
         // Constructors, getters, setters...
-        public UserProfile() {}
-        
-        public UserProfile(String userId, String bio) {
-            this.userId = userId;
-            this.bio = bio;
+        public Product() {}
+
+        public Product(String name, Double price) {
+            this.name = name;
+            this.price = price;
         }
-        
+
         public String getId() { return id; }
         public void setId(String id) { this.id = id; }
-        
-        public String getUserId() { return userId; }
-        public void setUserId(String userId) { this.userId = userId; }
-        
-        public String getBio() { return bio; }
-        public void setBio(String bio) { this.bio = bio; }
-        
-        public String getAvatarUrl() { return avatarUrl; }
-        public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
-        
-        public Object getPreferences() { return preferences; }
-        public void setPreferences(Object preferences) { this.preferences = preferences; }
+
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+
+        public Double getPrice() { return price; }
+        public void setPrice(Double price) { this.price = price; }
+
+        public Integer getStock() { return stock; }
+        public void setStock(Integer stock) { this.stock = stock; }
     }
 }

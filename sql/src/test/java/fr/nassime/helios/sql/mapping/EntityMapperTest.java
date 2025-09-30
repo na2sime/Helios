@@ -17,10 +17,10 @@ class EntityMapperTest {
     @Test
     void shouldExtractEntityMetadata() {
         EntityMetadata metadata = EntityMapper.getMetadata(TestUser.class);
-        
+
         assertNotNull(metadata);
         assertEquals("users", metadata.getTableName());
-        assertEquals("test_schema", metadata.getSchema());
+        assertNull(metadata.getSchema()); // Schema support removed
         assertNotNull(metadata.getIdField());
         assertEquals("id", metadata.getIdField().getName());
         assertEquals("id", metadata.getIdColumnName());
@@ -90,7 +90,6 @@ class EntityMapperTest {
     
     // Test entities
     @Persistable(name = "users", type = PersistenceType.SQL)
-    @Table(name = "users", schema = "test_schema")
     static class TestUser {
         @Id
         @GeneratedValue
@@ -113,7 +112,6 @@ class EntityMapperTest {
     }
     
     @Persistable(name = "simple_entities", type = PersistenceType.SQL)
-    @Table(name = "simple_entities")
     static class SimpleEntity {
         @Id
         @GeneratedValue

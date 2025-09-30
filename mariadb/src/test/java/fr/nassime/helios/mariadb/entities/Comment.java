@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
  * Test entity representing a Comment for MariaDB tests.
  */
 @Persistable(name = "comments", type = PersistenceType.SQL)
-@Table(name = "comments")
 @Data
 public class Comment {
     

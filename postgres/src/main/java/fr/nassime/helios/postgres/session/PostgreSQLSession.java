@@ -1,6 +1,5 @@
 package fr.nassime.helios.postgres.session;
 
-import fr.nassime.helios.api.exception.HeliosException;
 import fr.nassime.helios.api.query.Query;
 import fr.nassime.helios.api.transaction.Transaction;
 import fr.nassime.helios.postgres.query.PostgreSQLQuery;
@@ -13,9 +12,6 @@ import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 /**
  * PostgreSQL implementation of HeliosSession.
@@ -23,141 +19,30 @@ import java.util.function.Function;
  */
 @Slf4j
 public class PostgreSQLSession extends AbstractSqlSession {
-    
-    private final HikariDataSource dataSource;
-    private final AtomicBoolean closed = new AtomicBoolean(false);
-    private PostgreSQLTransaction currentTransaction;
-    
+
     public PostgreSQLSession(HikariDataSource dataSource) {
-        super();
-        this.dataSource = dataSource;
+        super(dataSource);
         log.debug("PostgreSQL session created");
     }
-    
+
     @Override
     protected SqlBuilder.PreparedQuery buildInsertQuery(EntityMetadata metadata, Object entity) {
         // Use PostgreSQL-specific insert builder with RETURNING clause
         return PostgreSQLSqlBuilder.buildInsert(metadata, entity);
     }
-    
+
     @Override
     protected Query createSqlQuery(String queryString) {
         return new PostgreSQLQuery<>(Object.class, this, queryString);
     }
-    
+
     @Override
     protected <T> Query<T> createEntityQuery(Class<T> entityClass) {
         return new PostgreSQLQuery<>(entityClass, this);
     }
-    
+
     @Override
-    public <T> T executeWithConnection(Function<Connection, T> operation) {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        // If we have an active transaction, use its connection
-        if (currentTransaction != null && currentTransaction.isActive()) {
-            return operation.apply(currentTransaction.getConnection());
-        }
-        
-        // No active transaction - create a new connection and manage it automatically
-        try {
-            Connection connection = dataSource.getConnection();
-            connection.setAutoCommit(false);
-            try {
-                T result = operation.apply(connection);
-                connection.commit();
-                return result;
-            } catch (Exception e) {
-                connection.rollback();
-                throw e;
-            } finally {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            throw new HeliosException("Database operation failed", e);
-        }
-    }
-    
-    @Override
-    public Transaction beginTransaction() {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        if (currentTransaction != null && currentTransaction.isActive()) {
-            throw new HeliosException("Transaction already active");
-        }
-        
-        try {
-            Connection connection = dataSource.getConnection();
-            currentTransaction = new PostgreSQLTransaction(connection);
-            log.debug("PostgreSQL transaction started");
-            return currentTransaction;
-        } catch (SQLException e) {
-            throw new HeliosException("Failed to begin transaction", e);
-        }
-    }
-    
-    @Override
-    public void flush() {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        if (currentTransaction != null && currentTransaction.isActive()) {
-            try {
-                currentTransaction.commit();
-                currentTransaction = null;
-                log.debug("PostgreSQL session flushed - transaction committed");
-            } catch (Exception e) {
-                log.error("Failed to flush session", e);
-                throw new HeliosException("Failed to flush session", e);
-            }
-        } else {
-            log.debug("No active transaction to flush");
-        }
-    }
-    
-    @Override
-    public void clear() {
-        if (isClosed()) {
-            throw new HeliosException("Session is closed");
-        }
-        
-        // Close current transaction without committing (rollback)
-        if (currentTransaction != null && currentTransaction.isActive()) {
-            try {
-                currentTransaction.rollback();
-                currentTransaction = null;
-                log.debug("PostgreSQL session cleared - transaction rolled back");
-            } catch (Exception e) {
-                log.error("Failed to clear session", e);
-                throw new HeliosException("Failed to clear session", e);
-            }
-        } else {
-            log.debug("No active transaction to clear");
-        }
-    }
-    
-    private boolean isClosed() {
-        return closed.get();
-    }
-    
-    @Override
-    public void close() {
-        if (closed.compareAndSet(false, true)) {
-            // Rollback active transaction if exists
-            if (currentTransaction != null && currentTransaction.isActive()) {
-                try {
-                    currentTransaction.rollback();
-                } catch (Exception e) {
-                    log.warn("Error rolling back transaction during session close", e);
-                }
-            }
-            
-            log.debug("PostgreSQL session closed");
-        }
+    protected Transaction createTransaction(Connection connection) {
+        return new PostgreSQLTransaction(connection);
     }
 }

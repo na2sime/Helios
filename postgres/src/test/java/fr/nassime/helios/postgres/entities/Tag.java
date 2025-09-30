@@ -11,7 +11,6 @@ import java.util.List;
  * Test entity representing a Tag (ManyToMany relationship).
  */
 @Persistable(name = "tags", type = PersistenceType.SQL)
-@Table(name = "tags")
 @Data
 public class Tag {
     

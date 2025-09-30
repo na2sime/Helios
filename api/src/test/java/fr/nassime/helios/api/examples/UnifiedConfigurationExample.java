@@ -81,18 +81,21 @@ public class UnifiedConfigurationExample {
     }
     
     /**
-     * Hybrid configuration example.
-     * Uses multiple backends simultaneously.
+     * Multi-database configuration example.
+     * Configure multiple database connections for different purposes.
      */
-    public static UnifiedHeliosConfiguration hybridExample() {
+    public static UnifiedHeliosConfiguration multiDatabaseExample() {
         return UnifiedHeliosConfiguration.builder()
-                .provider("hybrid")
-                .property("primary.provider", "postgresql")
-                .property("primary.connectionUrl", "jdbc:postgresql://localhost:5432/main")
-                .property("secondary.provider", "mongodb")
-                .property("secondary.connectionString", "mongodb://localhost:27017/analytics")
+                .postgresql()
+                    .host("localhost", 5432)
+                    .database("transactional_data")
+                    .credentials("user", "password")
+                .and()
+                .pooling(UnifiedHeliosConfiguration.poolConfig()
+                    .maxSize(20)
+                    .minSize(5))
                 .idConverter(Long.class, StandardIdConverters.longId())
-                .idConverter(String.class, StandardIdConverters.mongoObjectId())
+                .property("application.name", "HeliosMultiDB")
                 .build();
     }
     

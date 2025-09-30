@@ -9,7 +9,6 @@ import lombok.Data;
  * Test entity representing a UserProfile for MariaDB tests.
  */
 @Persistable(name = "user_profiles", type = PersistenceType.SQL)
-@Table(name = "user_profiles")
 @Data
 public class UserProfile {
     

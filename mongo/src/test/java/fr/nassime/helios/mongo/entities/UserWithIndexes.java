@@ -1,6 +1,7 @@
 package fr.nassime.helios.mongo.entities;
 
 import fr.nassime.helios.api.annotations.*;
+import fr.nassime.helios.api.annotations.enums.PersistenceType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "users_with_indexes")
+@Persistable(name = "users_with_indexes", type = PersistenceType.DOCUMENT)
 @Index(fields = {"email", "active"}, directions = {1, -1}, name = "email_active_compound")
 public class UserWithIndexes {
     
