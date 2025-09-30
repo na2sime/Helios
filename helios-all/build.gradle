@@ -1,0 +1,111 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'fr.nassime.helios'
+version = '2.0.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withJavadocJar()
+    withSourcesJar()
+}
+
+dependencies {
+    // Include all Helios modules
+    api project(':api')
+    api project(':sql')
+    api project(':postgres')
+    api project(':mariadb')
+    api project(':mongo')
+
+    // All dependencies will be bundled in the fat JAR
+}
+
+// Configuration for shadow (fat JAR)
+shadowJar {
+    archiveClassifier.set('all')
+    archiveBaseName.set('helios')
+
+    // Relocate dependencies to avoid conflicts
+    relocate 'com.zaxxer.hikari', 'fr.nassime.helios.shaded.hikari'
+
+    // Merge ServiceLoader files for provider discovery
+    mergeServiceFiles()
+
+    manifest {
+        attributes(
+            'Implementation-Title': 'Helios ORM All',
+            'Implementation-Version': project.version,
+            'Built-By': System.getProperty('user.name'),
+            'Built-JDK': System.getProperty('java.version'),
+            'Specification-Title': 'Helios ORM',
+            'Specification-Version': '2.0'
+        )
+    }
+}
+
+// Make shadowJar the default artifact
+build.dependsOn shadowJar
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+
+            artifactId = 'helios-all'
+
+            pom {
+                name = 'Helios ORM All'
+                description = 'Complete Helios ORM with PostgreSQL, MariaDB, and MongoDB support'
+                url = 'https://github.com/na2sime/helios'
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'na2sime'
+                        name = 'Nassime'
+                        email = 'contact@nassime.fr'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:git://github.com/na2sime/helios.git'
+                    developerConnection = 'scm:git:ssh://github.com/na2sime/helios.git'
+                    url = 'https://github.com/na2sime/helios'
+                }
+            }
+        }
+
+        shadow(MavenPublication) { publication ->
+            project.shadow.component(publication)
+            artifactId = 'helios-all'
+
+            pom {
+                name = 'Helios ORM All (Fat JAR)'
+                description = 'Complete Helios ORM with all dependencies bundled'
+                url = 'https://github.com/na2sime/helios'
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/na2sime/helios")
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+                password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}

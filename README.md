@@ -27,32 +27,34 @@ Helios is a powerful Object-Relational Mapper supporting PostgreSQL, MariaDB, an
 
 ### Installation
 
-#### Gradle
+#### Option 1: All-in-One (Recommended)
 
 ```groovy
 dependencies {
-    implementation 'fr.nassime.helios:api:2.0.0-SNAPSHOT'
-    implementation 'fr.nassime.helios:postgres:2.0.0-SNAPSHOT'  // Optional
-    implementation 'fr.nassime.helios:mariadb:2.0.0-SNAPSHOT'   // Optional
-    implementation 'fr.nassime.helios:mongo:2.0.0-SNAPSHOT'     // Optional
+    implementation 'fr.nassime.helios:helios-all:2.0.0'
 }
 ```
-
-#### Maven
 
 ```xml
 <dependency>
     <groupId>fr.nassime.helios</groupId>
-    <artifactId>api</artifactId>
-    <version>2.0.0-SNAPSHOT</version>
-</dependency>
-<!-- Add database providers as needed -->
-<dependency>
-    <groupId>fr.nassime.helios</groupId>
-    <artifactId>postgres</artifactId>
-    <version>2.0.0-SNAPSHOT</version>
+    <artifactId>helios-all</artifactId>
+    <version>2.0.0</version>
 </dependency>
 ```
+
+#### Option 2: Modular (Pick what you need)
+
+```groovy
+dependencies {
+    implementation 'fr.nassime.helios:helios-api:2.0.0'       // Required
+    implementation 'fr.nassime.helios:helios-postgres:2.0.0'  // Optional
+    implementation 'fr.nassime.helios:helios-mariadb:2.0.0'   // Optional
+    implementation 'fr.nassime.helios:helios-mongo:2.0.0'     // Optional
+}
+```
+
+See [Installation Guide](doc/INSTALLATION.md) for detailed instructions and GitHub Packages setup.
 
 ---
 
@@ -357,6 +359,7 @@ Helios helios = Helios.configure()
 
 ## Documentation 📚
 
+- [Installation Guide](doc/INSTALLATION.md) - Installation options and setup
 - [Configuration Guide](doc/CONFIGURATION.md) - Complete configuration reference with all options
 - [Multi-Database Guide](doc/MULTI_DATABASE.md) - Multi-database setup and best practices
 - [Examples](api/src/test/java/fr/nassime/helios/api/examples/) - Full code examples
@@ -392,13 +395,14 @@ Each database provider is independent and can be included as needed.
 
 ## Contributing 🤝
 
-We welcome contributions! Please see our contributing guidelines.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
+Quick start:
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and add tests
+4. Create a Pull Request to `main`
+5. CI will run automatically on your PR
 
 ---
 

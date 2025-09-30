@@ -1,0 +1,74 @@
+name: Publish to GitHub Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 2.0.0)'
+        required: false
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v2.0.0)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Update version if specified
+      if: github.event.inputs.version != ''
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        echo "Updating version to $VERSION"
+        sed -i "s/version = '.*'/version = '$VERSION'/" build.gradle
+        sed -i "s/version = '.*'/version = '$VERSION'/" api/build.gradle
+        sed -i "s/version = '.*'/version = '$VERSION'/" sql/build.gradle
+        sed -i "s/version = '.*'/version = '$VERSION'/" postgres/build.gradle
+        sed -i "s/version = '.*'/version = '$VERSION'/" mariadb/build.gradle
+        sed -i "s/version = '.*'/version = '$VERSION'/" mongo/build.gradle
+        sed -i "s/version = '.*'/version = '$VERSION'/" helios-all/build.gradle
+
+    - name: Build all modules
+      run: ./gradlew build --no-daemon
+
+    - name: Build fat JAR
+      run: ./gradlew :helios-all:shadowJar --no-daemon
+
+    - name: Publish to GitHub Packages
+      run: ./gradlew publish --no-daemon
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          api/build/libs/*.jar
+          sql/build/libs/*.jar
+          postgres/build/libs/*.jar
+          mariadb/build/libs/*.jar
+          mongo/build/libs/*.jar
+          helios-all/build/libs/helios-*-all.jar
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
