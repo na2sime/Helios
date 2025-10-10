@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'fr.nassime.helios'
-version = '2.0.0'
+version = '2.0.1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -56,6 +56,11 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
 
+            // Also publish the fat JAR as an additional artifact
+            artifact(tasks.shadowJar) {
+                classifier = 'all'
+            }
+
             artifactId = 'helios-all'
 
             pom {
@@ -85,17 +90,6 @@ publishing {
                 }
             }
         }
-
-        shadow(MavenPublication) { publication ->
-            project.shadow.component(publication)
-            artifactId = 'helios-all'
-
-            pom {
-                name = 'Helios ORM All (Fat JAR)'
-                description = 'Complete Helios ORM with all dependencies bundled'
-                url = 'https://github.com/na2sime/helios'
-            }
-        }
     }
 
     repositories {
@@ -108,4 +102,9 @@ publishing {
             }
         }
     }
+}
+
+// Prevent shadow plugin from creating its own publication
+components.java.withVariantsFromConfiguration(configurations.shadowRuntimeElements) {
+    skip()
 }
