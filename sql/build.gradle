@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'maven-publish'
 }
 
 group = 'fr.nassime.helios'
@@ -34,4 +35,50 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'helios-sql'
+
+            pom {
+                name = 'Helios ORM SQL'
+                description = 'Common SQL functionality for Helios ORM'
+                url = 'https://github.com/na2sime/helios'
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'na2sime'
+                        name = 'Nassime'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:git://github.com/na2sime/helios.git'
+                    developerConnection = 'scm:git:ssh://github.com/na2sime/helios.git'
+                    url = 'https://github.com/na2sime/helios'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/na2sime/helios")
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+                password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
 }
