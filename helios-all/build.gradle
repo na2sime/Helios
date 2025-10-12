@@ -23,6 +23,10 @@ dependencies {
     api project(':mongo')
 
     // All dependencies will be bundled in the fat JAR
+    api 'org.mariadb.jdbc:mariadb-java-client:3.3.2'
+    api 'org.mongodb:mongodb-driver-sync:5.5.1'
+    api 'org.mongodb:bson:5.5.1'
+    api 'org.postgresql:postgresql:42.7.2'
 }
 
 // Configuration for shadow (fat JAR)
